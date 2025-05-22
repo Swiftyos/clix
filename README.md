@@ -6,6 +6,7 @@ A command-line tool for developers to store and execute commands and workflows.
 
 - Save frequently used commands with descriptions for easy recall
 - Create and run complex workflows (e.g., troubleshooting production issues)
+- Support for authentication steps in workflows that pause for user interaction
 - Tag commands and workflows for better organization
 - Track command usage statistics
 - Export and import commands to share with your team
@@ -62,16 +63,29 @@ Create a JSON file containing the workflow steps:
     "name": "Step 1",
     "command": "echo 'Step 1'",
     "description": "First step of the workflow",
-    "continue_on_error": false
+    "continue_on_error": false,
+    "step_type": "Command"
+  },
+  {
+    "name": "Auth Step",
+    "command": "gcloud auth login",
+    "description": "Authenticate with Google Cloud",
+    "continue_on_error": false,
+    "step_type": "Auth"
   },
   {
     "name": "Step 2",
     "command": "echo 'Step 2'",
     "description": "Second step of the workflow",
-    "continue_on_error": true
+    "continue_on_error": true,
+    "step_type": "Command"
   }
 ]
 ```
+
+The `step_type` field can be either `Command` or `Auth`:
+- `Command`: Regular command execution (default behavior)
+- `Auth`: Executes the command and then pauses for user interaction, waiting for the user to press Enter after completing authentication
 
 Then add the workflow:
 
@@ -84,6 +98,26 @@ clix add-workflow my-workflow --description "My workflow" --steps-file workflow.
 ```bash
 clix run-workflow my-workflow
 ```
+
+#### Authentication Steps in Workflows
+
+Workflows can include authentication steps that require user interaction. For example, when running `gcloud auth login`, the user needs to follow a browser-based authentication flow. The workflow will pause after executing the auth command and wait for the user to press Enter before continuing:
+
+```
+Step 1 - Authenticate with Google Cloud
+Description: Login to Google Cloud using your credentials
+Command: gcloud auth login
+
+STDOUT:
+You are authorizing gcloud CLI to access your Google Cloud resources...
+Your browser has been opened to complete the authorization.
+
+This step requires authentication. Please follow the instructions above.
+Press Enter when you have completed the authentication process...
+
+```
+
+After the user completes the authentication process and presses Enter, the workflow will continue with the next step.
 
 ### Exporting commands and workflows
 
