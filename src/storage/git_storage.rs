@@ -1,6 +1,7 @@
 use crate::commands::models::{Command, CommandStore, Workflow};
 use crate::error::{ClixError, Result};
 use crate::git::GitRepositoryManager;
+use crate::settings::SettingsManager;
 use crate::storage::Storage;
 use std::fs;
 use std::path::Path;
@@ -49,15 +50,17 @@ impl GitIntegratedStorage {
 
     pub fn load_from_repositories(&self) -> Result<()> {
         let repo_paths = self.git_manager.get_all_repo_paths();
+        let mut local_store = self.local_storage.load()?;
         
         for repo_path in repo_paths {
-            self.load_from_repository(&repo_path)?;
+            self.load_from_repository(&repo_path, &mut local_store)?;
         }
         
+        self.local_storage.save(&local_store)?;
         Ok(())
     }
 
-    fn load_from_repository(&self, repo_path: &Path) -> Result<()> {
+    fn load_from_repository(&self, repo_path: &Path, local_store: &mut CommandStore) -> Result<()> {
         // Look for commands.json in the repository
         let commands_file = repo_path.join("commands.json");
         if commands_file.exists() {
@@ -65,46 +68,52 @@ impl GitIntegratedStorage {
             let repo_store: CommandStore = serde_json::from_str(&content)?;
             
             // Merge commands and workflows with local storage
-            self.merge_commands(&repo_store.commands)?;
-            self.merge_workflows(&repo_store.workflows)?;
+            self.merge_commands(&repo_store.commands, local_store)?;
+            self.merge_workflows(&repo_store.workflows, local_store)?;
         }
         
         Ok(())
     }
 
-    fn merge_commands(&self, repo_commands: &std::collections::HashMap<String, Command>) -> Result<()> {
-        let mut local_store = self.local_storage.load()?;
-        
+    fn merge_commands(&self, repo_commands: &std::collections::HashMap<String, Command>, local_store: &mut CommandStore) -> Result<()> {
         for (name, command) in repo_commands {
-            // Add or update command if it doesn't exist locally or is newer
-            if !local_store.commands.contains_key(name) {
+            if let Some(local_command) = local_store.commands.get(name) {
+                // Compare timestamps to determine if the repo command is newer
+                if command.created_at > local_command.created_at {
+                    local_store.commands.insert(name.clone(), command.clone());
+                }
+            } else {
+                // Command does not exist locally, so insert it
                 local_store.commands.insert(name.clone(), command.clone());
             }
         }
-        
-        self.local_storage.save(&local_store)?;
         Ok(())
     }
 
-    fn merge_workflows(&self, repo_workflows: &std::collections::HashMap<String, Workflow>) -> Result<()> {
-        let mut local_store = self.local_storage.load()?;
-        
+    fn merge_workflows(&self, repo_workflows: &std::collections::HashMap<String, Workflow>, local_store: &mut CommandStore) -> Result<()> {
         for (name, workflow) in repo_workflows {
-            // Add or update workflow if it doesn't exist locally
-            if !local_store.workflows.contains_key(name) {
+            if let Some(local_workflow) = local_store.workflows.get(name) {
+                // Compare timestamps to determine if the repo workflow is newer
+                if workflow.created_at > local_workflow.created_at {
+                    local_store.workflows.insert(name.clone(), workflow.clone());
+                }
+            } else {
+                // Workflow does not exist locally, so insert it
                 local_store.workflows.insert(name.clone(), workflow.clone());
             }
         }
-        
-        self.local_storage.save(&local_store)?;
         Ok(())
     }
 
     pub fn commit_changes_to_repositories(&self, message: &str) -> Result<()> {
+        let settings_manager = SettingsManager::new()?;
+        let settings = settings_manager.load()?;
+        let prefixed_message = format!("{} {}", settings.git_settings.commit_message_prefix, message);
+        
         let repo_paths = self.git_manager.get_all_repo_paths();
         
         for repo_path in repo_paths {
-            self.commit_to_repository(&repo_path, message)?;
+            self.commit_to_repository(&repo_path, &prefixed_message)?;
         }
         
         Ok(())

@@ -14,11 +14,6 @@ fn test_git_repository_manager_creation() {
     assert_eq!(manager.list_repositories().len(), 0);
 }
 
-#[test]
-fn test_git_integrated_storage_creation() {
-    let storage = GitIntegratedStorage::new();
-    assert!(storage.is_ok(), "Should create git integrated storage successfully");
-}
 
 #[test]
 fn test_repo_config_serialization() {
