@@ -601,7 +601,10 @@ impl CommandExecutor {
                 println!("{} {}", "Returning with exit code:".yellow().bold(), code);
                 // Create an output with the specified exit code
                 Ok(Output {
+                    #[cfg(unix)]
                     status: std::process::ExitStatus::from_raw(code),
+                    #[cfg(windows)]
+                    status: std::process::ExitStatus::from_raw(code as u32),
                     stdout: Vec::new(),
                     stderr: Vec::new(),
                 })
