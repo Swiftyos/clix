@@ -69,13 +69,13 @@ Create a JSON file with the workflow steps:
 ### Adding a workflow
 
 ```bash
-clix add-workflow my-workflow --description "Basic system info workflow" --steps-file workflow.json
+clix flow add my-workflow --description "Basic system info workflow" --steps-file workflow.json
 ```
 
 ### Running a workflow
 
 ```bash
-clix run-workflow my-workflow
+clix flow run my-workflow
 ```
 
 ## Sharing Commands and Workflows
@@ -142,6 +142,6 @@ Create a workflow JSON file:
 Add and run the workflow:
 
 ```bash
-clix add-workflow gcp-troubleshoot --description "GCP service troubleshooting" --steps-file gcp-workflow.json --tags cloud,gcp
-clix run-workflow gcp-troubleshoot
+clix flow add gcp-troubleshoot --description "GCP service troubleshooting" --steps-file gcp-workflow.json --tags cloud,gcp
+clix flow run gcp-troubleshoot
 ```
