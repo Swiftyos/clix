@@ -96,13 +96,13 @@ pub struct Workflow {
     pub profiles: HashMap<String, WorkflowVariableProfile>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum StepType {
     Command,
     Auth,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct WorkflowStep {
     pub name: String,
     pub command: String,

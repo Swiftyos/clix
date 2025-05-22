@@ -5,13 +5,14 @@ use std::fs;
 use std::process::exit;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use clix::cli::app::{CliArgs, Commands, FlowCommands};
+use clix::cli::app::{CliArgs, Commands, FlowCommands, SettingsCommands};
 use clix::commands::{
     Command, CommandExecutor, Workflow, WorkflowStep, WorkflowVariable, WorkflowVariableProfile,
 };
 use clix::error::{ClixError, Result};
 use clix::share::{ExportManager, ImportManager};
 use clix::storage::Storage;
+use clix::{ClaudeAssistant, SettingsManager};
 
 fn main() {
     if let Err(e) = run() {
@@ -370,6 +371,200 @@ fn run() -> Result<()> {
                 "Success:".green().bold(),
                 export_args.output
             );
+        }
+
+        Commands::Ask(ask_args) => {
+            // Load settings
+            let settings_manager = SettingsManager::new()?;
+            let settings = settings_manager.load()?;
+
+            // Initialize Claude Assistant
+            let assistant = ClaudeAssistant::new(settings)?;
+
+            // Get all commands and workflows for context
+            let commands = storage.list_commands()?;
+            let workflows = storage.list_workflows()?;
+
+            // Format question and get response
+            println!("{} {}", "Question:".green().bold(), ask_args.question);
+
+            // Convert to references for the assistant
+            let command_refs: Vec<&Command> = commands.iter().collect();
+            let workflow_refs: Vec<&Workflow> = workflows.iter().collect();
+
+            // Ask Claude
+            let (response, action) =
+                assistant.ask(&ask_args.question, command_refs, workflow_refs)?;
+
+            // Print Claude's response
+            println!("{}", "\nClaude's Response:".blue().bold());
+            println!("{}", response);
+
+            // Handle suggested action
+            match action {
+                clix::ai::claude::ClaudeAction::RunCommand(ref name) => {
+                    if assistant.confirm_action(&action)? {
+                        let command = storage.get_command(name)?;
+                        let output = CommandExecutor::execute_command(&command)?;
+                        CommandExecutor::print_command_output(&output);
+
+                        // Update usage statistics
+                        storage.update_command_usage(name)?;
+                    }
+                }
+                clix::ai::claude::ClaudeAction::RunWorkflow(ref name) => {
+                    if assistant.confirm_action(&action)? {
+                        let workflow = storage.get_workflow(name)?;
+                        let results = CommandExecutor::execute_workflow(&workflow, None, None)?;
+
+                        // Print all results
+                        println!("\n{}", "Workflow Results:".blue().bold());
+                        println!("{}", "=".repeat(50));
+
+                        for (step_name, result) in results {
+                            println!("{}: {}", "Step".green().bold(), step_name);
+
+                            match result {
+                                Ok(output) => CommandExecutor::print_command_output(&output),
+                                Err(e) => println!("{} {}", "Error:".red().bold(), e),
+                            }
+
+                            println!("{}", "-".repeat(50));
+                        }
+
+                        // Update usage statistics
+                        storage.update_workflow_usage(name)?;
+                    }
+                }
+                clix::ai::claude::ClaudeAction::CreateCommand {
+                    ref name,
+                    ref description,
+                    ref command,
+                } => {
+                    if assistant.confirm_action(&action)? {
+                        let command = Command::new(
+                            name.clone(),
+                            description.clone(),
+                            command.clone(),
+                            vec!["claude-generated".to_string()],
+                        );
+
+                        storage.add_command(command)?;
+                        println!(
+                            "{} Command '{}' added successfully",
+                            "Success:".green().bold(),
+                            name
+                        );
+                    }
+                }
+                clix::ai::claude::ClaudeAction::CreateWorkflow {
+                    ref name,
+                    ref description,
+                    ref steps,
+                } => {
+                    if assistant.confirm_action(&action)? {
+                        let workflow = Workflow::new(
+                            name.clone(),
+                            description.clone(),
+                            steps.clone(),
+                            vec!["claude-generated".to_string()],
+                        );
+
+                        storage.add_workflow(workflow)?;
+                        println!(
+                            "{} Workflow '{}' added successfully",
+                            "Success:".green().bold(),
+                            name
+                        );
+                    }
+                }
+                clix::ai::claude::ClaudeAction::NoAction => {}
+            }
+        }
+
+        Commands::Settings(settings_cmd) => {
+            let settings_manager = SettingsManager::new()?;
+
+            match settings_cmd {
+                SettingsCommands::List => {
+                    let settings = settings_manager.load()?;
+
+                    println!("{}", "Current Settings:".blue().bold());
+                    println!("{}", "=".repeat(50));
+                    println!("{}: {}", "AI Model".green().bold(), settings.ai_model);
+                    println!(
+                        "{}: {}",
+                        "AI Temperature".green().bold(),
+                        settings.ai_settings.temperature
+                    );
+                    println!(
+                        "{}: {}",
+                        "AI Max Tokens".green().bold(),
+                        settings.ai_settings.max_tokens
+                    );
+                }
+
+                SettingsCommands::SetAiModel(args) => {
+                    settings_manager.update_ai_model(&args.model)?;
+                    println!(
+                        "{} AI model set to: {}",
+                        "Success:".green().bold(),
+                        args.model
+                    );
+                }
+
+                SettingsCommands::ListAiModels => {
+                    // Load settings
+                    let settings = settings_manager.load()?;
+
+                    // Initialize Claude Assistant
+                    let assistant = ClaudeAssistant::new(settings)?;
+
+                    println!("{} Fetching available models...", "Info:".blue().bold());
+
+                    match assistant.list_models() {
+                        Ok(models) => {
+                            println!("{}", "Available AI Models:".blue().bold());
+                            println!("{}", "=".repeat(50));
+
+                            for model in models {
+                                println!("{}", model);
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("{} Failed to fetch models: {}", "Error:".red().bold(), e);
+                            eprintln!(
+                                "{} Make sure your Anthropic API key is set correctly.",
+                                "Hint:".yellow().bold()
+                            );
+                        }
+                    }
+                }
+
+                SettingsCommands::SetAiTemperature(args) => {
+                    if args.temperature < 0.0 || args.temperature > 1.0 {
+                        return Err(ClixError::InvalidCommandFormat(
+                            "Temperature must be between 0.0 and 1.0".to_string(),
+                        ));
+                    }
+
+                    settings_manager.update_ai_temperature(args.temperature)?;
+                    println!(
+                        "{} AI temperature set to: {}",
+                        "Success:".green().bold(),
+                        args.temperature
+                    );
+                }
+
+                SettingsCommands::SetAiMaxTokens(args) => {
+                    settings_manager.update_ai_max_tokens(args.max_tokens)?;
+                    println!(
+                        "{} AI max tokens set to: {}",
+                        "Success:".green().bold(),
+                        args.max_tokens
+                    );
+                }
+            }
         }
 
         Commands::Import(import_args) => {

@@ -16,6 +16,12 @@ pub enum ClixError {
 
     #[error("Invalid command format: {0}")]
     InvalidCommandFormat(String),
+
+    #[error("API error: {0}")]
+    ApiError(String),
+
+    #[error("Header value error: {0}")]
+    HeaderValueError(#[from] reqwest::header::InvalidHeaderValue),
 }
 
 pub type Result<T> = std::result::Result<T, ClixError>;
