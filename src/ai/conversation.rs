@@ -1,5 +1,4 @@
 use crate::commands::{Command, Workflow, WorkflowStep};
-use crate::error::{ClixError, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -135,7 +134,7 @@ impl ConversationSession {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
+
         (now - self.last_activity) > (max_age_hours * 3600)
     }
 
@@ -148,6 +147,12 @@ impl ConversationSession {
             .into_iter()
             .rev()
             .collect()
+    }
+}
+
+impl Default for ConversationSession {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -178,12 +183,21 @@ impl ConversationStore {
     pub fn list_active_sessions(&self) -> Vec<&ConversationSession> {
         self.sessions
             .values()
-            .filter(|s| matches!(s.state, ConversationState::Active | ConversationState::WaitingForConfirmation | ConversationState::CreatingWorkflow(_) | ConversationState::RefiningWorkflow(_)))
+            .filter(|s| {
+                matches!(
+                    s.state,
+                    ConversationState::Active
+                        | ConversationState::WaitingForConfirmation
+                        | ConversationState::CreatingWorkflow(_)
+                        | ConversationState::RefiningWorkflow(_)
+                )
+            })
             .collect()
     }
 
     pub fn cleanup_expired_sessions(&mut self, max_age_hours: u64) {
-        self.sessions.retain(|_, session| !session.is_expired(max_age_hours));
+        self.sessions
+            .retain(|_, session| !session.is_expired(max_age_hours));
     }
 
     pub fn remove_session(&mut self, id: &str) -> Option<ConversationSession> {

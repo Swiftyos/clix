@@ -37,6 +37,9 @@ pub enum ClixError {
 
     #[error("Rate limit exceeded: {0}")]
     RateLimitError(String),
+
+    #[error("Not found: {0}")]
+    NotFound(String),
 }
 
 impl ClixError {
@@ -89,6 +92,9 @@ impl ClixError {
             }
             ClixError::HeaderValueError(e) => {
                 format!("Header format error: {}\n💡 Check your API configuration.", e)
+            }
+            ClixError::NotFound(msg) => {
+                format!("Not found: {}\n💡 Check if the resource exists or verify the identifier.", msg)
             }
         }
     }

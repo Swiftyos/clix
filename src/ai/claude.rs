@@ -773,7 +773,8 @@ Follow these guidelines:
         self.rate_limiter.check_and_wait(estimated_tokens)?;
 
         // Create system prompt with conversation context
-        let system_prompt = self.create_conversational_system_prompt(session, &command_history, &workflow_history);
+        let system_prompt =
+            self.create_conversational_system_prompt(session, &command_history, &workflow_history);
 
         // Build conversation history
         let mut messages = Vec::new();
@@ -974,7 +975,7 @@ Final summary or goodbye message...
     fn parse_conversational_action(
         &self,
         text: &str,
-        session: &crate::ai::conversation::ConversationSession,
+        _session: &crate::ai::conversation::ConversationSession,
     ) -> Result<ClaudeAction> {
         // Check for conversation continuation
         if regex::Regex::new(r"\[CONTINUE\]")

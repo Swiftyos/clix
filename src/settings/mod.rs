@@ -97,6 +97,12 @@ impl SettingsManager {
     }
 
     pub fn update_ai_temperature(&self, temperature: f32) -> Result<()> {
+        if temperature < 0.0 || temperature > 1.0 {
+            return Err(ClixError::ValidationError(format!(
+                "Temperature must be between 0.0 and 1.0, got: {}",
+                temperature
+            )));
+        }
         let mut settings = self.load()?;
         settings.ai_settings.temperature = temperature;
         self.save(&settings)

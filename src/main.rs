@@ -3,16 +3,16 @@ use clap_complete::{Shell as CompletionShell, generate};
 use colored::Colorize;
 use std::collections::HashMap;
 use std::fs;
-use std::io;
+use std::io::{self, Write};
 use std::process::exit;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use clix::ai::{ConversationSession, ConversationState, MessageRole};
 use clix::cli::app::{CliArgs, Commands, FlowCommands, SettingsCommands, Shell};
 use clix::commands::{
     Command, CommandExecutor, Workflow, WorkflowStep, WorkflowVariable, WorkflowVariableProfile,
 };
 use clix::error::{ClixError, Result};
-use clix::ai::{ConversationSession, ConversationState, MessageRole};
 use clix::share::{ExportManager, ImportManager};
 use clix::storage::{ConversationStorage, Storage};
 use clix::{ClaudeAssistant, SettingsManager};
@@ -775,17 +775,21 @@ fn handle_conversational_ask(
         }
     } else {
         // Create new session
-        let session = ConversationSession::with_context(command_refs.clone(), workflow_refs.clone());
+        let session =
+            ConversationSession::with_context(command_refs.clone(), workflow_refs.clone());
         println!(
             "{} Started new conversation session: {}",
             "Info:".blue().bold(),
             session.id
         );
-        
+
         if ask_args.interactive {
-            println!("{} Interactive mode enabled. Type 'exit' or 'quit' to end the conversation.", "Info:".yellow().bold());
+            println!(
+                "{} Interactive mode enabled. Type 'exit' or 'quit' to end the conversation.",
+                "Info:".yellow().bold()
+            );
         }
-        
+
         session
     };
 
@@ -831,7 +835,12 @@ fn handle_conversational_ask(
             }
             _ => {
                 // Continue conversation - get next input
-                print!("\n{} ", "Continue conversation (or 'exit'/'quit' to end):".cyan().bold());
+                print!(
+                    "\n{} ",
+                    "Continue conversation (or 'exit'/'quit' to end):"
+                        .cyan()
+                        .bold()
+                );
                 io::stdout().flush().map_err(|e| {
                     ClixError::CommandExecutionFailed(format!("Failed to flush stdout: {}", e))
                 })?;
@@ -845,7 +854,11 @@ fn handle_conversational_ask(
                 if input.is_empty() || input == "exit" || input == "quit" {
                     session.set_state(ConversationState::Completed);
                     conversation_storage.update_session(&session)?;
-                    println!("{} Conversation ended. Session ID: {}", "Info:".green().bold(), session.id);
+                    println!(
+                        "{} Conversation ended. Session ID: {}",
+                        "Info:".green().bold(),
+                        session.id
+                    );
                     break;
                 }
 
