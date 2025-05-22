@@ -100,6 +100,56 @@ pub struct Workflow {
 pub enum StepType {
     Command,
     Auth,
+    Conditional,
+    Branch,
+    Loop,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct Condition {
+    pub expression: String,
+    pub variable: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub enum ConditionalAction {
+    RunThen,
+    RunElse,
+    Continue,
+    Break,
+    Return(i32),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct ConditionalBlock {
+    pub steps: Vec<WorkflowStep>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct ConditionalStep {
+    pub condition: Condition,
+    pub then_block: ConditionalBlock,
+    pub else_block: Option<ConditionalBlock>,
+    pub action: Option<ConditionalAction>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct BranchCase {
+    pub value: String,
+    pub steps: Vec<WorkflowStep>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct BranchStep {
+    pub variable: String,
+    pub cases: Vec<BranchCase>,
+    pub default_case: Option<Vec<WorkflowStep>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct LoopStep {
+    pub condition: Condition,
+    pub steps: Vec<WorkflowStep>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -109,6 +159,19 @@ pub struct WorkflowStep {
     pub description: String,
     pub continue_on_error: bool,
     pub step_type: StepType,
+    #[serde(default = "default_require_approval")]
+    pub require_approval: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conditional: Option<ConditionalStep>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub branch: Option<BranchStep>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub loop_data: Option<LoopStep>,
+}
+
+// Default value function for require_approval
+fn default_require_approval() -> bool {
+    false
 }
 
 impl WorkflowStep {
@@ -124,6 +187,29 @@ impl WorkflowStep {
             description,
             continue_on_error,
             step_type: StepType::Command,
+            require_approval: false,
+            conditional: None,
+            branch: None,
+            loop_data: None,
+        }
+    }
+
+    pub fn new_command_with_approval(
+        name: String,
+        command: String,
+        description: String,
+        continue_on_error: bool,
+    ) -> Self {
+        WorkflowStep {
+            name,
+            command,
+            description,
+            continue_on_error,
+            step_type: StepType::Command,
+            require_approval: true,
+            conditional: None,
+            branch: None,
+            loop_data: None,
         }
     }
 
@@ -134,7 +220,89 @@ impl WorkflowStep {
             description,
             continue_on_error: false, // Auth steps should not continue on error
             step_type: StepType::Auth,
+            require_approval: false,
+            conditional: None,
+            branch: None,
+            loop_data: None,
         }
+    }
+
+    pub fn new_conditional(
+        name: String,
+        description: String,
+        condition: Condition,
+        then_steps: Vec<WorkflowStep>,
+        else_steps: Option<Vec<WorkflowStep>>,
+        action: Option<ConditionalAction>,
+    ) -> Self {
+        let then_block = ConditionalBlock { steps: then_steps };
+        let else_block = else_steps.map(|steps| ConditionalBlock { steps });
+
+        WorkflowStep {
+            name,
+            command: String::new(), // Conditional steps don't have a direct command
+            description,
+            continue_on_error: false,
+            step_type: StepType::Conditional,
+            require_approval: false,
+            conditional: Some(ConditionalStep {
+                condition,
+                then_block,
+                else_block,
+                action,
+            }),
+            branch: None,
+            loop_data: None,
+        }
+    }
+
+    pub fn new_branch(
+        name: String,
+        description: String,
+        variable: String,
+        cases: Vec<BranchCase>,
+        default_case: Option<Vec<WorkflowStep>>,
+    ) -> Self {
+        WorkflowStep {
+            name,
+            command: String::new(), // Branch steps don't have a direct command
+            description,
+            continue_on_error: false,
+            step_type: StepType::Branch,
+            require_approval: false,
+            conditional: None,
+            branch: Some(BranchStep {
+                variable,
+                cases,
+                default_case,
+            }),
+            loop_data: None,
+        }
+    }
+
+    pub fn new_loop(
+        name: String,
+        description: String,
+        condition: Condition,
+        steps: Vec<WorkflowStep>,
+    ) -> Self {
+        WorkflowStep {
+            name,
+            command: String::new(), // Loop steps don't have a direct command
+            description,
+            continue_on_error: false,
+            step_type: StepType::Loop,
+            require_approval: false,
+            conditional: None,
+            branch: None,
+            loop_data: Some(LoopStep { condition, steps }),
+        }
+    }
+
+    // Method to set approval requirement
+    pub fn with_approval(mut self) -> Self {
+        self.require_approval = true;
+        self
     }
 }
 

@@ -9,6 +9,8 @@ A command-line tool for developers to store and execute commands and workflows.
 - Support for authentication steps in workflows that pause for user interaction
 - Support for variables in workflows with templating using `{{ variable_name }}` syntax
 - Save and reuse variables with profiles for different environments
+- **Conditional logic** in workflows with if/then/else, branching, and loops
+- **Convert shell functions** to workflows automatically
 - Tag commands and workflows for better organization
 - Track command usage statistics
 - Export and import commands to share with your team

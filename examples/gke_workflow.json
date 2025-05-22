@@ -1,0 +1,299 @@
+{
+  "version": "0.1.0",
+  "metadata": {
+    "exported_at": 1684756234,
+    "exported_by": "developer1",
+    "description": "GKE cluster management workflow with variables"
+  },
+  "commands": {},
+  "workflows": {
+    "gke": {
+      "name": "gke",
+      "description": "Switch to a GKE cluster environment with configurable project, cluster, zone and namespace settings",
+      "steps": [
+        {
+          "name": "Check Authentication",
+          "description": "Check if already authenticated with GCloud",
+          "command": "",
+          "continue_on_error": false,
+          "step_type": "Conditional",
+          "conditional": {
+            "condition": {
+              "expression": "! gcloud auth application-default print-access-token > /dev/null 2>&1",
+              "variable": null
+            },
+            "then_block": {
+              "steps": [
+                {
+                  "name": "Login to GCloud",
+                  "description": "Log in to Google Cloud",
+                  "command": "gcloud auth login",
+                  "continue_on_error": false,
+                  "step_type": "Auth"
+                },
+                {
+                  "name": "Setup Default Credentials",
+                  "description": "Set up application default credentials",
+                  "command": "gcloud auth application-default login",
+                  "continue_on_error": false,
+                  "step_type": "Auth"
+                }
+              ]
+            },
+            "else_block": null,
+            "action": null
+          }
+        },
+        {
+          "name": "Set Environment",
+          "description": "Configure environment based on parameter",
+          "command": "",
+          "continue_on_error": false,
+          "step_type": "Branch",
+          "branch": {
+            "variable": "env",
+            "cases": [
+              {
+                "value": "dev",
+                "steps": [
+                  {
+                    "name": "Set Dev Project",
+                    "description": "Set project to development",
+                    "command": "gcloud config set project {{ dev_project_id }}",
+                    "continue_on_error": false,
+                    "step_type": "Command"
+                  },
+                  {
+                    "name": "Get Dev Credentials",
+                    "description": "Get credentials for dev cluster",
+                    "command": "gcloud container clusters get-credentials {{ dev_cluster_name }} --zone={{ dev_zone }}",
+                    "continue_on_error": false,
+                    "step_type": "Command"
+                  },
+                  {
+                    "name": "Set Dev Namespace",
+                    "description": "Set namespace to development namespace",
+                    "command": "kubectl config set-context --current --namespace={{ dev_namespace }}",
+                    "continue_on_error": false,
+                    "step_type": "Command"
+                  }
+                ]
+              },
+              {
+                "value": "staging",
+                "steps": [
+                  {
+                    "name": "Set Staging Project",
+                    "description": "Set project to staging",
+                    "command": "gcloud config set project {{ staging_project_id }}",
+                    "continue_on_error": false,
+                    "step_type": "Command"
+                  },
+                  {
+                    "name": "Get Staging Credentials",
+                    "description": "Get credentials for staging cluster",
+                    "command": "gcloud container clusters get-credentials {{ staging_cluster_name }} --zone={{ staging_zone }}",
+                    "continue_on_error": false,
+                    "step_type": "Command"
+                  },
+                  {
+                    "name": "Set Staging Namespace",
+                    "description": "Set namespace to staging namespace",
+                    "command": "kubectl config set-context --current --namespace={{ staging_namespace }}",
+                    "continue_on_error": false,
+                    "step_type": "Command"
+                  }
+                ]
+              },
+              {
+                "value": "prod",
+                "steps": [
+                  {
+                    "name": "Set Prod Project",
+                    "description": "Set project to production",
+                    "command": "gcloud config set project {{ prod_project_id }}",
+                    "continue_on_error": false,
+                    "step_type": "Command",
+                    "require_approval": true
+                  },
+                  {
+                    "name": "Get Prod Credentials",
+                    "description": "Get credentials for prod cluster",
+                    "command": "gcloud container clusters get-credentials {{ prod_cluster_name }} --zone={{ prod_zone }}",
+                    "continue_on_error": false,
+                    "step_type": "Command"
+                  },
+                  {
+                    "name": "Set Prod Namespace",
+                    "description": "Set namespace to production namespace",
+                    "command": "kubectl config set-context --current --namespace={{ prod_namespace }}",
+                    "continue_on_error": false,
+                    "step_type": "Command"
+                  }
+                ]
+              }
+            ],
+            "default_case": [
+              {
+                "name": "Show Usage",
+                "description": "Show usage message",
+                "command": "echo \"Usage: gke [dev|staging|prod]\"",
+                "continue_on_error": false,
+                "step_type": "Command"
+              },
+              {
+                "name": "Exit",
+                "description": "Exit with error code",
+                "command": "",
+                "continue_on_error": false,
+                "step_type": "Conditional",
+                "conditional": {
+                  "condition": {
+                    "expression": "true",
+                    "variable": null
+                  },
+                  "then_block": {
+                    "steps": []
+                  },
+                  "else_block": null,
+                  "action": {
+                    "Return": 1
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "Show Current Context",
+          "description": "Display current Kubernetes context information",
+          "command": "kubectl config get-contexts | grep $(kubectl config current-context)",
+          "continue_on_error": true,
+          "step_type": "Command"
+        }
+      ],
+      "created_at": 1684756000,
+      "last_used": null,
+      "use_count": 0,
+      "tags": ["gcloud", "kubernetes", "gke"],
+      "variables": [
+        {
+          "name": "env",
+          "description": "Environment to switch to (dev, staging, or prod)",
+          "default_value": "dev",
+          "required": true
+        },
+        {
+          "name": "dev_project_id",
+          "description": "Development GCP project ID",
+          "default_value": "my-dev-project",
+          "required": true
+        },
+        {
+          "name": "dev_cluster_name",
+          "description": "Development GKE cluster name",
+          "default_value": "dev-gke-cluster",
+          "required": true
+        },
+        {
+          "name": "dev_zone",
+          "description": "Development GKE cluster zone",
+          "default_value": "us-central1-a",
+          "required": true
+        },
+        {
+          "name": "dev_namespace",
+          "description": "Development Kubernetes namespace",
+          "default_value": "dev",
+          "required": true
+        },
+        {
+          "name": "staging_project_id",
+          "description": "Staging GCP project ID",
+          "default_value": "my-staging-project",
+          "required": true
+        },
+        {
+          "name": "staging_cluster_name",
+          "description": "Staging GKE cluster name",
+          "default_value": "staging-gke-cluster",
+          "required": true
+        },
+        {
+          "name": "staging_zone",
+          "description": "Staging GKE cluster zone",
+          "default_value": "us-central1-a",
+          "required": true
+        },
+        {
+          "name": "staging_namespace",
+          "description": "Staging Kubernetes namespace",
+          "default_value": "staging",
+          "required": true
+        },
+        {
+          "name": "prod_project_id",
+          "description": "Production GCP project ID",
+          "default_value": "my-prod-project",
+          "required": true
+        },
+        {
+          "name": "prod_cluster_name",
+          "description": "Production GKE cluster name",
+          "default_value": "prod-gke-cluster",
+          "required": true
+        },
+        {
+          "name": "prod_zone",
+          "description": "Production GKE cluster zone",
+          "default_value": "us-central1-a",
+          "required": true
+        },
+        {
+          "name": "prod_namespace",
+          "description": "Production Kubernetes namespace",
+          "default_value": "prod",
+          "required": true
+        }
+      ],
+      "profiles": {
+        "company-a": {
+          "name": "company-a",
+          "description": "GKE settings for Company A",
+          "variables": {
+            "dev_project_id": "company-a-dev",
+            "dev_cluster_name": "company-a-dev-cluster",
+            "dev_zone": "us-east1-b",
+            "dev_namespace": "company-a-dev",
+            "staging_project_id": "company-a-staging",
+            "staging_cluster_name": "company-a-staging-cluster",
+            "staging_zone": "us-east1-b",
+            "staging_namespace": "company-a-staging",
+            "prod_project_id": "company-a-prod",
+            "prod_cluster_name": "company-a-prod-cluster",
+            "prod_zone": "us-east1-b",
+            "prod_namespace": "company-a-prod"
+          }
+        },
+        "company-b": {
+          "name": "company-b",
+          "description": "GKE settings for Company B",
+          "variables": {
+            "dev_project_id": "company-b-dev",
+            "dev_cluster_name": "company-b-dev-cluster",
+            "dev_zone": "us-west1-a",
+            "dev_namespace": "company-b-dev",
+            "staging_project_id": "company-b-staging",
+            "staging_cluster_name": "company-b-staging-cluster",
+            "staging_zone": "us-west1-a",
+            "staging_namespace": "company-b-staging",
+            "prod_project_id": "company-b-prod",
+            "prod_cluster_name": "company-b-prod-cluster",
+            "prod_zone": "us-west1-a",
+            "prod_namespace": "company-b-prod"
+          }
+        }
+      }
+    }
+  }
+}

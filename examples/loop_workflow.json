@@ -1,0 +1,169 @@
+{
+  "version": "0.1.0",
+  "metadata": {
+    "exported_at": 1684756234,
+    "exported_by": "developer1",
+    "description": "Example workflow with loops and approval"
+  },
+  "commands": {},
+  "workflows": {
+    "backup-directories": {
+      "name": "backup-directories",
+      "description": "Backup multiple directories in a loop with approval for sensitive operations",
+      "steps": [
+        {
+          "name": "Initialize Counter",
+          "description": "Initialize the loop counter",
+          "command": "COUNTER=0; MAX_DIRS={{ max_dirs }}; echo \"Will backup $MAX_DIRS directories\"",
+          "continue_on_error": false,
+          "step_type": "Command"
+        },
+        {
+          "name": "Create Backup Directory",
+          "description": "Create backup destination directory",
+          "command": "mkdir -p {{ backup_dir }}",
+          "continue_on_error": false,
+          "step_type": "Command"
+        },
+        {
+          "name": "Directory Backup Loop",
+          "description": "Loop through directories to backup",
+          "command": "",
+          "continue_on_error": false,
+          "step_type": "Loop",
+          "loop_data": {
+            "condition": {
+              "expression": "[ $COUNTER -lt $MAX_DIRS ]",
+              "variable": null
+            },
+            "steps": [
+              {
+                "name": "Get Directory",
+                "description": "Get the current directory to backup",
+                "command": "DIR_TO_BACKUP=`echo {{ dir_list }} | cut -d ',' -f $((COUNTER+1))`; echo \"Processing directory: $DIR_TO_BACKUP\"",
+                "continue_on_error": false,
+                "step_type": "Command"
+              },
+              {
+                "name": "Check Directory",
+                "description": "Check if directory exists",
+                "command": "[ -d \"$DIR_TO_BACKUP\" ] && echo \"Directory exists\" || echo \"Directory does not exist\"",
+                "continue_on_error": false,
+                "step_type": "Command"
+              },
+              {
+                "name": "Check Directory Existence",
+                "description": "Verify directory exists before backup",
+                "command": "",
+                "continue_on_error": false,
+                "step_type": "Conditional",
+                "conditional": {
+                  "condition": {
+                    "expression": "[ -d \"$DIR_TO_BACKUP\" ]",
+                    "variable": null
+                  },
+                  "then_block": {
+                    "steps": [
+                      {
+                        "name": "Backup Directory",
+                        "description": "Create backup of the directory",
+                        "command": "echo \"Creating backup of $DIR_TO_BACKUP to {{ backup_dir }}/backup_$COUNTER.tar.gz\"",
+                        "continue_on_error": false,
+                        "step_type": "Command"
+                      },
+                      {
+                        "name": "Perform Backup",
+                        "description": "Actually perform the backup operation",
+                        "command": "tar -czf {{ backup_dir }}/backup_$COUNTER.tar.gz -C $(dirname \"$DIR_TO_BACKUP\") $(basename \"$DIR_TO_BACKUP\") 2>/dev/null || echo \"Backup failed but continuing\"",
+                        "continue_on_error": true,
+                        "step_type": "Command",
+                        "require_approval": true
+                      }
+                    ]
+                  },
+                  "else_block": {
+                    "steps": [
+                      {
+                        "name": "Report Missing Directory",
+                        "description": "Report that directory doesn't exist",
+                        "command": "echo \"Directory $DIR_TO_BACKUP does not exist, skipping backup\"",
+                        "continue_on_error": false,
+                        "step_type": "Command"
+                      }
+                    ]
+                  },
+                  "action": null
+                }
+              },
+              {
+                "name": "Increment Counter",
+                "description": "Increment the loop counter",
+                "command": "COUNTER=$((COUNTER+1)); echo \"Processed $COUNTER of $MAX_DIRS directories\"",
+                "continue_on_error": false,
+                "step_type": "Command"
+              }
+            ]
+          }
+        },
+        {
+          "name": "Verify Backups",
+          "description": "Verify backup completion",
+          "command": "echo \"Backup process completed for $COUNTER directories\"",
+          "continue_on_error": false,
+          "step_type": "Command"
+        },
+        {
+          "name": "Cleanup",
+          "description": "Clean up temporary files",
+          "command": "echo \"Cleaning up temporary files\"",
+          "continue_on_error": true,
+          "step_type": "Command"
+        }
+      ],
+      "created_at": 1684756000,
+      "last_used": null,
+      "use_count": 0,
+      "tags": ["backup", "loop", "approval"],
+      "variables": [
+        {
+          "name": "max_dirs",
+          "description": "Maximum number of directories to process",
+          "default_value": "3",
+          "required": true
+        },
+        {
+          "name": "dir_list",
+          "description": "Comma-separated list of directories to backup",
+          "default_value": "/tmp/dir1,/tmp/dir2,/tmp/dir3",
+          "required": true
+        },
+        {
+          "name": "backup_dir",
+          "description": "Directory to store backups",
+          "default_value": "/tmp/backups",
+          "required": true
+        }
+      ],
+      "profiles": {
+        "development": {
+          "name": "development",
+          "description": "Development backup profile",
+          "variables": {
+            "max_dirs": "3",
+            "dir_list": "/tmp/dev1,/tmp/dev2,/tmp/dev3",
+            "backup_dir": "/tmp/dev_backups"
+          }
+        },
+        "production": {
+          "name": "production",
+          "description": "Production backup profile",
+          "variables": {
+            "max_dirs": "5",
+            "dir_list": "/var/www/html,/etc/nginx,/var/log,/home/user,/opt/app",
+            "backup_dir": "/mnt/backups"
+          }
+        }
+      }
+    }
+  }
+}

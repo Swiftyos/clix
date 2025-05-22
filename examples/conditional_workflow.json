@@ -1,0 +1,264 @@
+{
+  "version": "0.1.0",
+  "metadata": {
+    "exported_at": 1684756234,
+    "exported_by": "developer1",
+    "description": "Example conditional workflow with approval"
+  },
+  "commands": {},
+  "workflows": {
+    "deploy-with-conditionals": {
+      "name": "deploy-with-conditionals",
+      "description": "Deploy application with environment-based conditionals and approval for production",
+      "steps": [
+        {
+          "name": "Check Environment",
+          "description": "Validate deployment environment",
+          "command": "",
+          "continue_on_error": false,
+          "step_type": "Conditional",
+          "conditional": {
+            "condition": {
+              "expression": "[ \"$ENV\" = \"dev\" -o \"$ENV\" = \"staging\" -o \"$ENV\" = \"prod\" ]",
+              "variable": null
+            },
+            "then_block": {
+              "steps": [
+                {
+                  "name": "Verify Environment",
+                  "description": "Print the selected environment",
+                  "command": "echo \"Deploying to $ENV environment\"",
+                  "continue_on_error": false,
+                  "step_type": "Command"
+                }
+              ]
+            },
+            "else_block": {
+              "steps": [
+                {
+                  "name": "Invalid Environment",
+                  "description": "Show error for invalid environment",
+                  "command": "echo \"Error: Invalid environment $ENV. Must be dev, staging, or prod\"",
+                  "continue_on_error": false,
+                  "step_type": "Command"
+                }
+              ]
+            },
+            "action": {
+              "Return": 1
+            }
+          }
+        },
+        {
+          "name": "Setup Environment",
+          "description": "Configure environment-specific settings",
+          "command": "",
+          "continue_on_error": false,
+          "step_type": "Branch",
+          "branch": {
+            "variable": "ENV",
+            "cases": [
+              {
+                "value": "dev",
+                "steps": [
+                  {
+                    "name": "Dev Setup",
+                    "description": "Setup development environment",
+                    "command": "echo \"Setting up dev environment\"",
+                    "continue_on_error": false,
+                    "step_type": "Command"
+                  }
+                ]
+              },
+              {
+                "value": "staging",
+                "steps": [
+                  {
+                    "name": "Staging Setup",
+                    "description": "Setup staging environment",
+                    "command": "echo \"Setting up staging environment\"",
+                    "continue_on_error": false,
+                    "step_type": "Command"
+                  }
+                ]
+              },
+              {
+                "value": "prod",
+                "steps": [
+                  {
+                    "name": "Production Setup",
+                    "description": "Setup production environment",
+                    "command": "echo \"Setting up production environment\"",
+                    "continue_on_error": false,
+                    "step_type": "Command",
+                    "require_approval": true
+                  }
+                ]
+              }
+            ],
+            "default_case": null
+          }
+        },
+        {
+          "name": "Run Build",
+          "description": "Build the application",
+          "command": "echo \"Building application for $ENV environment\"",
+          "continue_on_error": false,
+          "step_type": "Command"
+        },
+        {
+          "name": "Run Tests",
+          "description": "Run tests before deployment",
+          "command": "echo \"Running tests for $ENV deployment\"",
+          "continue_on_error": false,
+          "step_type": "Command"
+        },
+        {
+          "name": "Check Test Results",
+          "description": "Verify tests passed before deploying",
+          "command": "",
+          "continue_on_error": false,
+          "step_type": "Conditional",
+          "conditional": {
+            "condition": {
+              "expression": "$? -eq 0",
+              "variable": null
+            },
+            "then_block": {
+              "steps": [
+                {
+                  "name": "Prepare Deployment",
+                  "description": "Prepare for deployment after successful tests",
+                  "command": "echo \"Tests passed, preparing deployment to $ENV\"",
+                  "continue_on_error": false,
+                  "step_type": "Command"
+                }
+              ]
+            },
+            "else_block": {
+              "steps": [
+                {
+                  "name": "Report Failure",
+                  "description": "Report test failure",
+                  "command": "echo \"Tests failed, aborting deployment to $ENV\"",
+                  "continue_on_error": false,
+                  "step_type": "Command"
+                }
+              ]
+            },
+            "action": {
+              "Return": 1
+            }
+          }
+        },
+        {
+          "name": "Deploy Application",
+          "description": "Deploy the application to the environment",
+          "command": "",
+          "continue_on_error": false,
+          "step_type": "Branch",
+          "branch": {
+            "variable": "ENV",
+            "cases": [
+              {
+                "value": "dev",
+                "steps": [
+                  {
+                    "name": "Dev Deploy",
+                    "description": "Deploy to development",
+                    "command": "echo \"Deploying to development environment\"",
+                    "continue_on_error": false,
+                    "step_type": "Command"
+                  }
+                ]
+              },
+              {
+                "value": "staging",
+                "steps": [
+                  {
+                    "name": "Staging Deploy",
+                    "description": "Deploy to staging",
+                    "command": "echo \"Deploying to staging environment\"",
+                    "continue_on_error": false,
+                    "step_type": "Command",
+                    "require_approval": true
+                  }
+                ]
+              },
+              {
+                "value": "prod",
+                "steps": [
+                  {
+                    "name": "Production Deploy",
+                    "description": "Deploy to production",
+                    "command": "echo \"Deploying to production environment\"",
+                    "continue_on_error": false,
+                    "step_type": "Command",
+                    "require_approval": true
+                  },
+                  {
+                    "name": "Post-Deployment Verification",
+                    "description": "Verify production deployment",
+                    "command": "echo \"Verifying production deployment\"",
+                    "continue_on_error": false,
+                    "step_type": "Command"
+                  }
+                ]
+              }
+            ],
+            "default_case": null
+          }
+        },
+        {
+          "name": "Verify Deployment",
+          "description": "Run verification after deployment",
+          "command": "echo \"Verifying deployment in $ENV environment\"",
+          "continue_on_error": false,
+          "step_type": "Command"
+        },
+        {
+          "name": "Notify Success",
+          "description": "Send notification of successful deployment",
+          "command": "echo \"Successfully deployed to $ENV environment\"",
+          "continue_on_error": true,
+          "step_type": "Command"
+        }
+      ],
+      "created_at": 1684756000,
+      "last_used": null,
+      "use_count": 0,
+      "tags": ["deployment", "conditional", "approval"],
+      "variables": [
+        {
+          "name": "ENV",
+          "description": "Environment to deploy to (dev, staging, prod)",
+          "default_value": "dev",
+          "required": true
+        }
+      ],
+      "profiles": {
+        "development": {
+          "name": "development",
+          "description": "Development environment profile",
+          "variables": {
+            "ENV": "dev"
+          }
+        },
+        "staging": {
+          "name": "staging",
+          "description": "Staging environment profile",
+          "variables": {
+            "ENV": "staging"
+          }
+        },
+        "production": {
+          "name": "production",
+          "description": "Production environment profile",
+          "variables": {
+            "ENV": "prod"
+          }
+        }
+      }
+    }
+  }
+}

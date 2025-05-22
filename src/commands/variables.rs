@@ -1,4 +1,7 @@
-use crate::commands::models::{Workflow, WorkflowStep};
+use crate::commands::models::{
+    BranchCase, BranchStep, Condition, ConditionalBlock, ConditionalStep, LoopStep, Workflow,
+    WorkflowStep,
+};
 use crate::error::{ClixError, Result};
 use colored::Colorize;
 use regex::Regex;
@@ -149,12 +152,100 @@ impl VariableProcessor {
     pub fn process_step(step: &WorkflowStep, context: &WorkflowContext) -> WorkflowStep {
         let processed_command = Self::process_variables(&step.command, context);
 
+        // Process conditional expressions if they exist
+        let processed_conditional = step.conditional.as_ref().map(|conditional| {
+            let processed_condition = Condition {
+                expression: Self::process_variables(&conditional.condition.expression, context),
+                variable: conditional.condition.variable.clone(),
+            };
+
+            let processed_then_block = ConditionalBlock {
+                steps: conditional
+                    .then_block
+                    .steps
+                    .iter()
+                    .map(|step| Self::process_step(step, context))
+                    .collect(),
+            };
+
+            let processed_else_block =
+                conditional
+                    .else_block
+                    .as_ref()
+                    .map(|else_block| ConditionalBlock {
+                        steps: else_block
+                            .steps
+                            .iter()
+                            .map(|step| Self::process_step(step, context))
+                            .collect(),
+                    });
+
+            ConditionalStep {
+                condition: processed_condition,
+                then_block: processed_then_block,
+                else_block: processed_else_block,
+                action: conditional.action.clone(),
+            }
+        });
+
+        // Process branch if it exists
+        let processed_branch = step.branch.as_ref().map(|branch| {
+            let processed_cases = branch
+                .cases
+                .iter()
+                .map(|case| BranchCase {
+                    value: Self::process_variables(&case.value, context),
+                    steps: case
+                        .steps
+                        .iter()
+                        .map(|step| Self::process_step(step, context))
+                        .collect(),
+                })
+                .collect();
+
+            let processed_default_case = branch.default_case.as_ref().map(|default_case| {
+                default_case
+                    .iter()
+                    .map(|step| Self::process_step(step, context))
+                    .collect()
+            });
+
+            BranchStep {
+                variable: branch.variable.clone(),
+                cases: processed_cases,
+                default_case: processed_default_case,
+            }
+        });
+
+        // Process loop if it exists
+        let processed_loop = step.loop_data.as_ref().map(|loop_data| {
+            let processed_condition = Condition {
+                expression: Self::process_variables(&loop_data.condition.expression, context),
+                variable: loop_data.condition.variable.clone(),
+            };
+
+            let processed_steps = loop_data
+                .steps
+                .iter()
+                .map(|step| Self::process_step(step, context))
+                .collect();
+
+            LoopStep {
+                condition: processed_condition,
+                steps: processed_steps,
+            }
+        });
+
         WorkflowStep {
             name: step.name.clone(),
             command: processed_command,
             description: step.description.clone(),
             continue_on_error: step.continue_on_error,
             step_type: step.step_type.clone(),
+            require_approval: step.require_approval,
+            conditional: processed_conditional,
+            branch: processed_branch,
+            loop_data: processed_loop,
         }
     }
 }

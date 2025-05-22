@@ -1,0 +1,73 @@
+{
+  "version": "0.1.0",
+  "metadata": {
+    "exported_at": 1684756234,
+    "exported_by": "developer1",
+    "description": "Simple time-based workflow example for testing"
+  },
+  "commands": {},
+  "workflows": {
+    "time-check": {
+      "name": "time-check",
+      "description": "Check if current hour is even or odd",
+      "steps": [
+        {
+          "name": "Get Current Hour",
+          "description": "Get the current hour from system time",
+          "command": "CURRENT_HOUR=$(date +%H); echo \"Current hour is $CURRENT_HOUR\"",
+          "continue_on_error": false,
+          "step_type": "Command"
+        },
+        {
+          "name": "Check Even or Odd",
+          "description": "Check if current hour is even or odd",
+          "command": "",
+          "continue_on_error": false,
+          "step_type": "Conditional",
+          "conditional": {
+            "condition": {
+              "expression": "[ $((CURRENT_HOUR % 2)) -eq 0 ]",
+              "variable": "IS_EVEN"
+            },
+            "then_block": {
+              "steps": [
+                {
+                  "name": "Even Hour",
+                  "description": "Message for even hour",
+                  "command": "echo \"Current hour ($CURRENT_HOUR) is EVEN\"",
+                  "continue_on_error": false,
+                  "step_type": "Command"
+                }
+              ]
+            },
+            "else_block": {
+              "steps": [
+                {
+                  "name": "Odd Hour",
+                  "description": "Message for odd hour",
+                  "command": "echo \"Current hour ($CURRENT_HOUR) is ODD\"",
+                  "continue_on_error": false,
+                  "step_type": "Command"
+                }
+              ]
+            },
+            "action": null
+          }
+        },
+        {
+          "name": "Show Date Info",
+          "description": "Show additional date information",
+          "command": "date",
+          "continue_on_error": true,
+          "step_type": "Command"
+        }
+      ],
+      "created_at": 1684756000,
+      "last_used": null,
+      "use_count": 0,
+      "tags": ["time", "conditional", "test"],
+      "variables": [],
+      "profiles": {}
+    }
+  }
+}

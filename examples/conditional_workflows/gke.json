@@ -1,0 +1,141 @@
+{
+  "name": "gke",
+  "description": "Switch to a GKE cluster environment",
+  "variables": [
+    {
+      "name": "env",
+      "description": "Environment to switch to (dev or prod)",
+      "required": true
+    }
+  ],
+  "steps": [
+    {
+      "name": "Check Authentication",
+      "description": "Check if already authenticated with GCloud",
+      "step_type": "Conditional",
+      "command": "",
+      "continue_on_error": false,
+      "conditional": {
+        "condition": {
+          "expression": "! gcloud auth application-default print-access-token > /dev/null 2>&1",
+          "variable": null
+        },
+        "then_block": {
+          "steps": [
+            {
+              "name": "Login to GCloud",
+              "description": "Log in to Google Cloud",
+              "step_type": "Auth",
+              "command": "gcloud auth login",
+              "continue_on_error": false
+            },
+            {
+              "name": "Setup Default Credentials",
+              "description": "Set up application default credentials",
+              "step_type": "Auth",
+              "command": "gcloud auth application-default login",
+              "continue_on_error": false
+            }
+          ]
+        },
+        "else_block": null,
+        "action": null
+      }
+    },
+    {
+      "name": "Set Environment",
+      "description": "Configure environment based on parameter",
+      "step_type": "Branch",
+      "command": "",
+      "continue_on_error": false,
+      "branch": {
+        "variable": "env",
+        "cases": [
+          {
+            "value": "dev",
+            "steps": [
+              {
+                "name": "Set Dev Project",
+                "description": "Set project to development",
+                "step_type": "Command",
+                "command": "gcloud config set project dev-project",
+                "continue_on_error": false
+              },
+              {
+                "name": "Get Dev Credentials",
+                "description": "Get credentials for dev cluster",
+                "step_type": "Command",
+                "command": "gcloud container clusters get-credentials dev-gke-cluster --zone=us-central1-a",
+                "continue_on_error": false
+              },
+              {
+                "name": "Set Dev Namespace",
+                "description": "Set namespace to dev-namespace",
+                "step_type": "Command",
+                "command": "kubectl config set-context --current --namespace=dev-namespace",
+                "continue_on_error": false
+              }
+            ]
+          },
+          {
+            "value": "prod",
+            "steps": [
+              {
+                "name": "Set Prod Project",
+                "description": "Set project to production",
+                "step_type": "Command",
+                "command": "gcloud config set project prod-project",
+                "continue_on_error": false,
+                "require_approval": true
+              },
+              {
+                "name": "Get Prod Credentials",
+                "description": "Get credentials for prod cluster",
+                "step_type": "Command",
+                "command": "gcloud container clusters get-credentials prod-gke-cluster --zone=us-central1-a",
+                "continue_on_error": false
+              },
+              {
+                "name": "Set Prod Namespace",
+                "description": "Set namespace to prod-namespace",
+                "step_type": "Command",
+                "command": "kubectl config set-context --current --namespace=prod-namespace",
+                "continue_on_error": false
+              }
+            ]
+          }
+        ],
+        "default_case": [
+          {
+            "name": "Show Usage",
+            "description": "Show usage message",
+            "step_type": "Command",
+            "command": "echo \"Usage: gke [dev|prod]\"",
+            "continue_on_error": false
+          },
+          {
+            "name": "Exit",
+            "description": "Exit with error code",
+            "step_type": "Conditional",
+            "command": "",
+            "continue_on_error": false,
+            "conditional": {
+              "condition": {
+                "expression": "true",
+                "variable": null
+              },
+              "then_block": {
+                "steps": []
+              },
+              "else_block": null,
+              "action": {
+                "Return": 1
+              }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "tags": ["gcloud", "kubernetes", "devops"]
+}

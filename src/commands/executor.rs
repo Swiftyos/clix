@@ -1,9 +1,11 @@
-use crate::commands::models::{Command, StepType, Workflow, WorkflowStep};
+use crate::commands::expression::ExpressionEvaluator;
+use crate::commands::models::{Command, ConditionalAction, StepType, Workflow, WorkflowStep};
 use crate::commands::variables::{VariableProcessor, WorkflowContext};
 use crate::error::{ClixError, Result};
 use colored::Colorize;
 use std::collections::HashMap;
 use std::io::{self, BufRead, Write};
+use std::os::unix::process::ExitStatusExt;
 use std::process::{Command as ProcessCommand, Output};
 
 pub struct CommandExecutor;
@@ -67,6 +69,7 @@ impl CommandExecutor {
         VariableProcessor::prompt_for_variables(workflow, &mut context)?;
 
         let mut results = Vec::new();
+        let mut last_output: Option<Output> = None;
 
         for (index, step) in workflow.steps.iter().enumerate() {
             println!(
@@ -76,15 +79,40 @@ impl CommandExecutor {
                 step.name
             );
             println!("{} {}", "Description:".blue().bold(), step.description);
-            println!("{} {}", "Command:".blue().bold(), step.command);
+
+            if !step.command.is_empty() {
+                println!("{} {}", "Command:".blue().bold(), step.command);
+            }
 
             // Process variables in the step
             let processed_step = VariableProcessor::process_step(step, &context);
 
+            // Check if step requires approval
+            if processed_step.require_approval {
+                Self::request_approval(&processed_step)?;
+            }
+
+            // Execute the step based on its type
             let result = match processed_step.step_type {
                 StepType::Command => Self::execute_command_step(&processed_step),
                 StepType::Auth => Self::execute_auth_step(&processed_step),
+                StepType::Conditional => Self::execute_conditional_step(
+                    &processed_step,
+                    &context.variables,
+                    last_output.as_ref(),
+                ),
+                StepType::Branch => {
+                    Self::execute_branch_step(&processed_step, &mut context, &mut results)
+                }
+                StepType::Loop => {
+                    Self::execute_loop_step(&processed_step, &mut context, &mut results)
+                }
             };
+
+            // Update the last_output if this step produced an output
+            if let Ok(ref output) = result {
+                last_output = Some(output.clone());
+            }
 
             // Check if we need to continue before moving the result
             let should_continue = match &result {
@@ -105,6 +133,488 @@ impl CommandExecutor {
         }
 
         Ok(results)
+    }
+
+    /// Execute a conditional step (if/then/else)
+    fn execute_conditional_step(
+        step: &WorkflowStep,
+        variables: &HashMap<String, String>,
+        last_output: Option<&Output>,
+    ) -> Result<Output> {
+        // Conditional steps must have a conditional property
+        let conditional = step.conditional.as_ref().ok_or_else(|| {
+            ClixError::CommandExecutionFailed(
+                "Conditional step missing conditional property".to_string(),
+            )
+        })?;
+
+        // Evaluate the condition
+        println!(
+            "{} {}",
+            "Evaluating condition:".blue().bold(),
+            conditional.condition.expression
+        );
+
+        let condition_result = ExpressionEvaluator::evaluate(
+            &conditional.condition.expression,
+            variables,
+            last_output,
+        )?;
+
+        println!("{} {}", "Condition result:".blue().bold(), condition_result);
+
+        // Store the result in a variable if specified
+        if let Some(var_name) = &conditional.condition.variable {
+            println!(
+                "{} {} = {}",
+                "Setting variable:".blue().bold(),
+                var_name,
+                condition_result
+            );
+            // TODO: Update the context with the result variable
+            // For now, we can't update the context because it's not mutable in this method
+        }
+
+        // Determine what action to take based on condition result and specified action
+        let action = match (&conditional.action, condition_result) {
+            (Some(ConditionalAction::RunThen), _) => ConditionalAction::RunThen,
+            (Some(ConditionalAction::RunElse), _) => ConditionalAction::RunElse,
+            (Some(ConditionalAction::Continue), _) => ConditionalAction::Continue,
+            (Some(ConditionalAction::Break), _) => ConditionalAction::Break,
+            (Some(ConditionalAction::Return(code)), _) => ConditionalAction::Return(*code),
+            (None, true) => ConditionalAction::RunThen,
+            (None, false) => {
+                if conditional.else_block.is_some() {
+                    ConditionalAction::RunElse
+                } else {
+                    ConditionalAction::Continue
+                }
+            }
+        };
+
+        // Take the appropriate action
+        match action {
+            ConditionalAction::RunThen => {
+                println!("{}", "Executing 'then' block".blue().bold());
+                // Execute the steps in the then block
+                let mut context = WorkflowContext::new();
+                context.variables = variables.clone();
+
+                // We'll execute the steps and use the last step's output as our result
+                let mut last_step_output = None;
+                let mut results = Vec::new();
+
+                for (index, step) in conditional.then_block.steps.iter().enumerate() {
+                    println!(
+                        "\n{} {} - {}",
+                        "Then Block Step".blue().bold(),
+                        (index + 1).to_string().blue().bold(),
+                        step.name
+                    );
+
+                    // Process variables in the step
+                    let processed_step = VariableProcessor::process_step(step, &context);
+
+                    // Check if step requires approval
+                    if processed_step.require_approval {
+                        Self::request_approval(&processed_step)?;
+                    }
+
+                    // Execute the step
+                    let result = match processed_step.step_type {
+                        StepType::Command => Self::execute_command_step(&processed_step),
+                        StepType::Auth => Self::execute_auth_step(&processed_step),
+                        StepType::Conditional => Self::execute_conditional_step(
+                            &processed_step,
+                            &context.variables,
+                            last_step_output.as_ref(),
+                        ),
+                        StepType::Branch => {
+                            Self::execute_branch_step(&processed_step, &mut context, &mut results)
+                        }
+                        StepType::Loop => {
+                            Self::execute_loop_step(&processed_step, &mut context, &mut results)
+                        }
+                    };
+
+                    // Update last_step_output if successful
+                    if let Ok(ref output) = result {
+                        last_step_output = Some(output.clone());
+                    }
+
+                    // Check if we need to continue
+                    let should_continue = match &result {
+                        Ok(_) => true,
+                        Err(_) => processed_step.continue_on_error,
+                    };
+
+                    // Store the result
+                    results.push((processed_step.name.clone(), result));
+
+                    if !should_continue {
+                        println!(
+                            "{} Command failed, stopping conditional block execution",
+                            "Error:".red().bold()
+                        );
+                        break;
+                    }
+                }
+
+                // Return the last output if we have one, or create a success output
+                if let Some(output) = last_step_output {
+                    Ok(output)
+                } else {
+                    Ok(Output {
+                        status: std::process::ExitStatus::from_raw(0),
+                        stdout: Vec::new(),
+                        stderr: Vec::new(),
+                    })
+                }
+            }
+            ConditionalAction::RunElse => {
+                if let Some(else_block) = &conditional.else_block {
+                    println!("{}", "Executing 'else' block".blue().bold());
+
+                    // Execute the steps in the else block
+                    let mut context = WorkflowContext::new();
+                    context.variables = variables.clone();
+
+                    // We'll execute the steps and use the last step's output as our result
+                    let mut last_step_output = None;
+                    let mut results = Vec::new();
+
+                    for (index, step) in else_block.steps.iter().enumerate() {
+                        println!(
+                            "\n{} {} - {}",
+                            "Else Block Step".blue().bold(),
+                            (index + 1).to_string().blue().bold(),
+                            step.name
+                        );
+
+                        // Process variables in the step
+                        let processed_step = VariableProcessor::process_step(step, &context);
+
+                        // Check if step requires approval
+                        if processed_step.require_approval {
+                            Self::request_approval(&processed_step)?;
+                        }
+
+                        // Execute the step
+                        let result = match processed_step.step_type {
+                            StepType::Command => Self::execute_command_step(&processed_step),
+                            StepType::Auth => Self::execute_auth_step(&processed_step),
+                            StepType::Conditional => Self::execute_conditional_step(
+                                &processed_step,
+                                &context.variables,
+                                last_step_output.as_ref(),
+                            ),
+                            StepType::Branch => Self::execute_branch_step(
+                                &processed_step,
+                                &mut context,
+                                &mut results,
+                            ),
+                            StepType::Loop => {
+                                Self::execute_loop_step(&processed_step, &mut context, &mut results)
+                            }
+                        };
+
+                        // Update last_step_output if successful
+                        if let Ok(ref output) = result {
+                            last_step_output = Some(output.clone());
+                        }
+
+                        // Check if we need to continue
+                        let should_continue = match &result {
+                            Ok(_) => true,
+                            Err(_) => processed_step.continue_on_error,
+                        };
+
+                        // Store the result
+                        results.push((processed_step.name.clone(), result));
+
+                        if !should_continue {
+                            println!(
+                                "{} Command failed, stopping conditional block execution",
+                                "Error:".red().bold()
+                            );
+                            break;
+                        }
+                    }
+
+                    // Return the last output if we have one, or create a success output
+                    if let Some(output) = last_step_output {
+                        Ok(output)
+                    } else {
+                        Ok(Output {
+                            status: std::process::ExitStatus::from_raw(0),
+                            stdout: Vec::new(),
+                            stderr: Vec::new(),
+                        })
+                    }
+                } else {
+                    // No else block, return a success output
+                    Ok(Output {
+                        status: std::process::ExitStatus::from_raw(0),
+                        stdout: Vec::new(),
+                        stderr: Vec::new(),
+                    })
+                }
+            }
+            ConditionalAction::Continue => {
+                println!("{}", "Skipping conditional block".blue().bold());
+                // Return a success output
+                Ok(Output {
+                    status: std::process::ExitStatus::from_raw(0),
+                    stdout: Vec::new(),
+                    stderr: Vec::new(),
+                })
+            }
+            ConditionalAction::Break => {
+                println!("{}", "Breaking workflow execution".yellow().bold());
+                Err(ClixError::CommandExecutionFailed(
+                    "Workflow execution stopped by conditional break".to_string(),
+                ))
+            }
+            ConditionalAction::Return(code) => {
+                println!("{} {}", "Returning with exit code:".yellow().bold(), code);
+                // Create an output with the specified exit code
+                Ok(Output {
+                    status: std::process::ExitStatus::from_raw(code),
+                    stdout: Vec::new(),
+                    stderr: Vec::new(),
+                })
+            }
+        }
+    }
+
+    /// Execute a branch step (case/switch)
+    fn execute_branch_step(
+        step: &WorkflowStep,
+        context: &mut WorkflowContext,
+        results: &mut Vec<(String, Result<Output>)>,
+    ) -> Result<Output> {
+        // Branch steps must have a branch property
+        let branch = step.branch.as_ref().ok_or_else(|| {
+            ClixError::CommandExecutionFailed("Branch step missing branch property".to_string())
+        })?;
+
+        // Get the variable value to branch on
+        let var_name = &branch.variable;
+        let var_value = context.variables.get(var_name).cloned().unwrap_or_default();
+
+        println!(
+            "{} {} = {}",
+            "Branching on:".blue().bold(),
+            var_name,
+            var_value
+        );
+
+        // Find the matching case
+        let matching_case = branch.cases.iter().find(|case| case.value == var_value);
+
+        let steps_to_execute = if let Some(case) = matching_case {
+            println!("{} {}", "Matched case:".blue().bold(), case.value);
+            &case.steps
+        } else if let Some(default_steps) = &branch.default_case {
+            println!("{}", "Using default case".blue().bold());
+            default_steps
+        } else {
+            println!(
+                "{}",
+                "No matching case found and no default case".yellow().bold()
+            );
+            // Return a success output since we're not treating this as an error
+            return Ok(Output {
+                status: std::process::ExitStatus::from_raw(0),
+                stdout: Vec::new(),
+                stderr: Vec::new(),
+            });
+        };
+
+        // Execute the steps in the selected case
+        let mut last_step_output = None;
+
+        for (index, step) in steps_to_execute.iter().enumerate() {
+            println!(
+                "\n{} {} - {}",
+                "Branch Step".blue().bold(),
+                (index + 1).to_string().blue().bold(),
+                step.name
+            );
+
+            // Process variables in the step
+            let processed_step = VariableProcessor::process_step(step, context);
+
+            // Check if step requires approval
+            if processed_step.require_approval {
+                Self::request_approval(&processed_step)?;
+            }
+
+            // Execute the step
+            let result = match processed_step.step_type {
+                StepType::Command => Self::execute_command_step(&processed_step),
+                StepType::Auth => Self::execute_auth_step(&processed_step),
+                StepType::Conditional => Self::execute_conditional_step(
+                    &processed_step,
+                    &context.variables,
+                    last_step_output.as_ref(),
+                ),
+                StepType::Branch => Self::execute_branch_step(&processed_step, context, results),
+                StepType::Loop => Self::execute_loop_step(&processed_step, context, results),
+            };
+
+            // Update last_step_output if successful
+            if let Ok(ref output) = result {
+                last_step_output = Some(output.clone());
+            }
+
+            // Check if we need to continue
+            let should_continue = match &result {
+                Ok(_) => true,
+                Err(_) => processed_step.continue_on_error,
+            };
+
+            // Store the result
+            results.push((processed_step.name.clone(), result));
+
+            if !should_continue {
+                println!(
+                    "{} Command failed, stopping branch execution",
+                    "Error:".red().bold()
+                );
+                break;
+            }
+        }
+
+        // Return the last output if we have one, or create a success output
+        if let Some(output) = last_step_output {
+            Ok(output)
+        } else {
+            Ok(Output {
+                status: std::process::ExitStatus::from_raw(0),
+                stdout: Vec::new(),
+                stderr: Vec::new(),
+            })
+        }
+    }
+
+    /// Execute a loop step (while)
+    fn execute_loop_step(
+        step: &WorkflowStep,
+        context: &mut WorkflowContext,
+        results: &mut Vec<(String, Result<Output>)>,
+    ) -> Result<Output> {
+        // Loop steps must have a loop_data property
+        let loop_data = step.loop_data.as_ref().ok_or_else(|| {
+            ClixError::CommandExecutionFailed("Loop step missing loop_data property".to_string())
+        })?;
+
+        println!(
+            "{} {}",
+            "Loop condition:".blue().bold(),
+            loop_data.condition.expression
+        );
+
+        // Create a counter to prevent infinite loops
+        let max_iterations = 100; // Reasonable limit to prevent infinite loops
+        let mut iterations = 0;
+        let mut last_step_output = None;
+
+        // Execute the loop until the condition becomes false or we hit max iterations
+        while iterations < max_iterations {
+            // Evaluate the loop condition
+            let condition_result = ExpressionEvaluator::evaluate(
+                &loop_data.condition.expression,
+                &context.variables,
+                last_step_output.as_ref(),
+            )?;
+
+            if !condition_result {
+                println!("{}", "Loop condition is false, exiting loop".blue().bold());
+                break;
+            }
+
+            println!("{} {}", "Loop iteration:".blue().bold(), iterations + 1);
+
+            // Execute the steps in the loop
+            for (index, step) in loop_data.steps.iter().enumerate() {
+                println!(
+                    "\n{} {}.{} - {}",
+                    "Loop Step".blue().bold(),
+                    iterations + 1,
+                    index + 1,
+                    step.name
+                );
+
+                // Process variables in the step
+                let processed_step = VariableProcessor::process_step(step, context);
+
+                // Check if step requires approval
+                if processed_step.require_approval {
+                    Self::request_approval(&processed_step)?;
+                }
+
+                // Execute the step
+                let result = match processed_step.step_type {
+                    StepType::Command => Self::execute_command_step(&processed_step),
+                    StepType::Auth => Self::execute_auth_step(&processed_step),
+                    StepType::Conditional => Self::execute_conditional_step(
+                        &processed_step,
+                        &context.variables,
+                        last_step_output.as_ref(),
+                    ),
+                    StepType::Branch => {
+                        Self::execute_branch_step(&processed_step, context, results)
+                    }
+                    StepType::Loop => Self::execute_loop_step(&processed_step, context, results),
+                };
+
+                // Update last_step_output if successful
+                if let Ok(ref output) = result {
+                    last_step_output = Some(output.clone());
+                }
+
+                // Check if we need to continue
+                let should_continue = match &result {
+                    Ok(_) => true,
+                    Err(_) => processed_step.continue_on_error,
+                };
+
+                // Store the result
+                results.push((
+                    format!("Loop[{}].{}", iterations + 1, processed_step.name),
+                    result,
+                ));
+
+                if !should_continue {
+                    println!(
+                        "{} Command failed, stopping loop execution",
+                        "Error:".red().bold()
+                    );
+                    break;
+                }
+            }
+
+            iterations += 1;
+        }
+
+        if iterations >= max_iterations {
+            println!(
+                "{}",
+                "Loop reached maximum iterations, stopping".yellow().bold()
+            );
+        }
+
+        // Return the last output if we have one, or create a success output
+        if let Some(output) = last_step_output {
+            Ok(output)
+        } else {
+            Ok(Output {
+                status: std::process::ExitStatus::from_raw(0),
+                stdout: Vec::new(),
+                stderr: Vec::new(),
+            })
+        }
     }
 
     fn execute_command_step(step: &WorkflowStep) -> Result<Output> {
@@ -187,6 +697,45 @@ impl CommandExecutor {
                 "Failed to execute auth command: {}",
                 e
             ))),
+        }
+    }
+
+    /// Request approval from the user before executing a step
+    fn request_approval(step: &WorkflowStep) -> Result<()> {
+        println!(
+            "{}",
+            "⚠️  This step requires approval before execution:"
+                .yellow()
+                .bold()
+        );
+        println!("{} {}", "Name:".blue().bold(), step.name);
+        println!("{} {}", "Description:".blue().bold(), step.description);
+
+        if !step.command.is_empty() {
+            println!("{} {}", "Command:".blue().bold(), step.command);
+        }
+
+        print!("{} [y/N]: ", "Do you want to proceed?".yellow().bold());
+        io::stdout().flush().map_err(|e| {
+            ClixError::CommandExecutionFailed(format!("Failed to flush stdout: {}", e))
+        })?;
+
+        let stdin = io::stdin();
+        let mut handle = stdin.lock();
+        let mut input = String::new();
+
+        handle.read_line(&mut input).map_err(|e| {
+            ClixError::CommandExecutionFailed(format!("Failed to read approval input: {}", e))
+        })?;
+
+        let input = input.trim().to_lowercase();
+        if input == "y" || input == "yes" {
+            println!("{}", "Proceeding with step execution.".green());
+            Ok(())
+        } else {
+            Err(ClixError::CommandExecutionFailed(
+                "Step execution canceled by user".to_string(),
+            ))
         }
     }
 

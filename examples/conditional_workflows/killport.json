@@ -1,0 +1,93 @@
+{
+  "name": "killport",
+  "description": "Kill processes running on a specific port",
+  "variables": [
+    {
+      "name": "port",
+      "description": "Port number to kill",
+      "required": true,
+      "default_value": null
+    }
+  ],
+  "steps": [
+    {
+      "name": "Find Process",
+      "description": "Find processes running on the specified port",
+      "step_type": "Command",
+      "command": "lsof -ti tcp:{{ port }}",
+      "continue_on_error": true
+    },
+    {
+      "name": "Check Process Exists",
+      "description": "Check if any processes were found",
+      "step_type": "Conditional",
+      "command": "",
+      "continue_on_error": false,
+      "conditional": {
+        "condition": {
+          "expression": "$? -eq 0",
+          "variable": "port_pids"
+        },
+        "then_block": {
+          "steps": [
+            {
+              "name": "Display Processes",
+              "description": "Show the processes that will be killed",
+              "step_type": "Command",
+              "command": "echo \"Found process(es) running on port {{ port }}:\"",
+              "continue_on_error": false
+            },
+            {
+              "name": "Kill Processes",
+              "description": "Kill all processes on the specified port",
+              "step_type": "Command",
+              "command": "lsof -ti tcp:{{ port }} | xargs kill -9",
+              "continue_on_error": false,
+              "require_approval": true
+            },
+            {
+              "name": "Confirm",
+              "description": "Confirm processes were killed",
+              "step_type": "Command",
+              "command": "echo \"Process(es) on port {{ port }} killed successfully\"",
+              "continue_on_error": false
+            }
+          ]
+        },
+        "else_block": {
+          "steps": [
+            {
+              "name": "No Process",
+              "description": "Inform user that no processes were found",
+              "step_type": "Command",
+              "command": "echo \"No process found running on port {{ port }}\"",
+              "continue_on_error": false
+            },
+            {
+              "name": "Exit",
+              "description": "Exit with error code",
+              "step_type": "Conditional",
+              "command": "",
+              "continue_on_error": false,
+              "conditional": {
+                "condition": {
+                  "expression": "true",
+                  "variable": null
+                },
+                "then_block": {
+                  "steps": []
+                },
+                "else_block": null,
+                "action": {
+                  "Return": 1
+                }
+              }
+            }
+          ]
+        },
+        "action": null
+      }
+    }
+  ],
+  "tags": ["system", "network", "utility"]
+}

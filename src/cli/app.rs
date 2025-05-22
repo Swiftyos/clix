@@ -61,6 +61,15 @@ pub enum FlowCommands {
 
     /// List profiles for a workflow
     ListProfiles(ListWorkflowProfilesArgs),
+
+    /// Add a conditional step to a workflow
+    AddCondition(AddConditionArgs),
+
+    /// Add a branch step to a workflow
+    AddBranch(AddBranchArgs),
+
+    /// Convert a shell function to a workflow
+    ConvertFunction(ConvertFunctionArgs),
 }
 
 #[derive(Args, Debug)]
@@ -269,4 +278,90 @@ pub struct AddWorkflowProfileArgs {
 pub struct ListWorkflowProfilesArgs {
     /// Name of the workflow to list profiles for
     pub workflow_name: String,
+}
+
+#[derive(Args, Debug)]
+pub struct AddConditionArgs {
+    /// Name of the workflow to add the condition to
+    pub workflow_name: String,
+
+    /// Name of the conditional step
+    #[arg(short, long)]
+    pub name: String,
+
+    /// Description of the conditional step
+    #[arg(short, long)]
+    pub description: String,
+
+    /// The condition expression to evaluate
+    #[arg(short, long)]
+    pub condition: String,
+
+    /// Variable to store result in (optional)
+    #[arg(short, long)]
+    pub variable: Option<String>,
+
+    /// Steps file for the 'then' block
+    #[arg(long)]
+    pub then_file: String,
+
+    /// Steps file for the 'else' block (optional)
+    #[arg(long)]
+    pub else_file: Option<String>,
+
+    /// Action to take (run_then, run_else, continue, break, return)
+    #[arg(short, long)]
+    pub action: Option<String>,
+
+    /// Return code if action is 'return'
+    #[arg(short, long)]
+    pub return_code: Option<i32>,
+}
+
+#[derive(Args, Debug)]
+pub struct AddBranchArgs {
+    /// Name of the workflow to add the branch to
+    pub workflow_name: String,
+
+    /// Name of the branch step
+    #[arg(short, long)]
+    pub name: String,
+
+    /// Description of the branch step
+    #[arg(short, long)]
+    pub description: String,
+
+    /// Variable name to branch on
+    #[arg(short, long)]
+    pub variable: String,
+
+    /// Cases file in JSON format
+    #[arg(short, long)]
+    pub cases_file: String,
+
+    /// Default case steps file (optional)
+    #[arg(short, long)]
+    pub default_file: Option<String>,
+}
+
+#[derive(Args, Debug)]
+pub struct ConvertFunctionArgs {
+    /// Name for the new workflow
+    pub workflow_name: String,
+
+    /// Path to the shell script file containing the function
+    #[arg(short, long)]
+    pub file: String,
+
+    /// Name of the function to convert
+    #[arg(short, long)]
+    pub function: String,
+
+    /// Description of the workflow
+    #[arg(short, long)]
+    pub description: String,
+
+    /// Optional tags for categorization
+    #[arg(short, long)]
+    pub tags: Option<Vec<String>>,
 }

@@ -354,6 +354,53 @@ fn run() -> Result<()> {
                     }
                 }
             }
+
+            // Handle the new conditional and branch commands
+            FlowCommands::AddCondition(_) => {
+                println!("Add condition feature is not yet implemented in the CLI");
+            }
+            FlowCommands::AddBranch(_) => {
+                println!("Add branch feature is not yet implemented in the CLI");
+            }
+            FlowCommands::ConvertFunction(args) => {
+                use clix::commands::FunctionConverter;
+
+                println!(
+                    "{} Converting function '{}' from '{}'...",
+                    "Info:".blue().bold(),
+                    args.function,
+                    args.file
+                );
+
+                let tags = args.tags.unwrap_or_else(Vec::new);
+
+                match FunctionConverter::convert_function(
+                    &args.file,
+                    &args.function,
+                    &args.workflow_name,
+                    &args.description,
+                    tags.clone(),
+                ) {
+                    Ok(workflow) => {
+                        // Add the workflow to storage
+                        storage.add_workflow(workflow)?;
+                        println!(
+                            "{} Function '{}' successfully converted to workflow '{}'",
+                            "Success:".green().bold(),
+                            args.function,
+                            args.workflow_name
+                        );
+                    }
+                    Err(e) => {
+                        println!(
+                            "{} Failed to convert function: {}",
+                            "Error:".red().bold(),
+                            e
+                        );
+                        return Err(e);
+                    }
+                }
+            }
         },
 
         Commands::Export(export_args) => {

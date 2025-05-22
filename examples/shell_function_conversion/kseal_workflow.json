@@ -1,0 +1,64 @@
+{
+  "name": "kseal",
+  "description": "Create a sealed secret for Kubernetes",
+  "variables": [
+    {
+      "name": "env",
+      "description": "Environment to create the secret for (dev or prod)",
+      "required": true,
+      "default_value": null
+    },
+    {
+      "name": "secret_value",
+      "description": "The secret value to seal",
+      "required": true,
+      "default_value": null
+    }
+  ],
+  "steps": [
+    {
+      "name": "Check Dependencies",
+      "description": "Check if kubeseal is installed",
+      "step_type": "Conditional",
+      "command": "",
+      "continue_on_error": false,
+      "conditional": {
+        "condition": {
+          "expression": "! command -v kubeseal &> /dev/null",
+          "variable": null
+        },
+        "then_block": {
+          "steps": [
+            {
+              "name": "Display Error",
+              "description": "Show error about missing kubeseal",
+              "step_type": "Command",
+              "command": "echo \"Error: kubeseal is not installed. Please install it first.\"",
+              "continue_on_error": false
+            }
+          ]
+        },
+        "else_block": null,
+        "action": {
+          "Return": 1
+        }
+      }
+    },
+    {
+      "name": "Set Environment",
+      "description": "Set up the Kubernetes context using gke workflow",
+      "step_type": "Command",
+      "command": "clix flow run gke --var env={{ env }}",
+      "continue_on_error": false
+    },
+    {
+      "name": "Create Sealed Secret",
+      "description": "Create and output sealed secret",
+      "step_type": "Command",
+      "command": "echo -n \"{{ secret_value }}\" | kubeseal --raw --scope cluster-wide",
+      "continue_on_error": false,
+      "require_approval": true
+    }
+  ],
+  "tags": ["kubernetes", "secrets", "security", "devops"]
+}

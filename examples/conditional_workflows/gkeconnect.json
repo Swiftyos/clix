@@ -1,0 +1,303 @@
+{
+  "name": "gkeconnect",
+  "description": "Connect to Kubernetes services in GKE via port-forwarding",
+  "variables": [
+    {
+      "name": "env",
+      "description": "Environment to connect to (dev or prod)",
+      "required": true,
+      "default_value": null
+    },
+    {
+      "name": "service",
+      "description": "Service to connect to (rabbitmq, postgres, redis, etc.)",
+      "required": true,
+      "default_value": null
+    },
+    {
+      "name": "outside_port",
+      "description": "Local port to use (defaults to service-specific)",
+      "required": false,
+      "default_value": null
+    },
+    {
+      "name": "inside_port",
+      "description": "Remote port to connect to (defaults to service-specific)",
+      "required": false,
+      "default_value": null
+    }
+  ],
+  "steps": [
+    {
+      "name": "Setup Environment",
+      "description": "Use gke workflow to set up environment",
+      "step_type": "Command",
+      "command": "clix flow run gke --var env={{ env }}",
+      "continue_on_error": false
+    },
+    {
+      "name": "Determine Service Details",
+      "description": "Set service-specific variables",
+      "step_type": "Branch",
+      "command": "",
+      "continue_on_error": false,
+      "branch": {
+        "variable": "service",
+        "cases": [
+          {
+            "value": "rabbitmq",
+            "steps": [
+              {
+                "name": "Set RabbitMQ Defaults",
+                "description": "Set RabbitMQ namespace and service name",
+                "step_type": "Conditional",
+                "command": "",
+                "continue_on_error": false,
+                "conditional": {
+                  "condition": {
+                    "expression": "true",
+                    "variable": null
+                  },
+                  "then_block": {
+                    "steps": []
+                  },
+                  "else_block": null,
+                  "action": {
+                    "RunThen": {}
+                  }
+                },
+                "conditional": {
+                  "condition": {
+                    "expression": "true",
+                    "variable": "k8s_service"
+                  },
+                  "then_block": {
+                    "steps": [
+                      {
+                        "name": "Set RabbitMQ Values",
+                        "description": "Set values for RabbitMQ service",
+                        "step_type": "Command",
+                        "command": "export namespace=\"{{ env }}-rabbitmq\" && export k8s_service=\"rabbitmq-{{ env }}\" && export default_inside_port=\"15672\" && export default_outside_port=\"15673\"",
+                        "continue_on_error": false
+                      }
+                    ]
+                  },
+                  "else_block": null,
+                  "action": null
+                }
+              }
+            ]
+          },
+          {
+            "value": "postgres",
+            "steps": [
+              {
+                "name": "Set PostgreSQL Defaults",
+                "description": "Set PostgreSQL namespace and service name",
+                "step_type": "Conditional",
+                "command": "",
+                "continue_on_error": false,
+                "conditional": {
+                  "condition": {
+                    "expression": "true",
+                    "variable": "k8s_service"
+                  },
+                  "then_block": {
+                    "steps": [
+                      {
+                        "name": "Set PostgreSQL Values",
+                        "description": "Set values for PostgreSQL service",
+                        "step_type": "Command",
+                        "command": "export namespace=\"{{ env }}-postgresql\" && export k8s_service=\"postgresql-{{ env }}\" && export default_inside_port=\"5432\" && export default_outside_port=\"5433\"",
+                        "continue_on_error": false
+                      }
+                    ]
+                  },
+                  "else_block": null,
+                  "action": null
+                }
+              }
+            ]
+          },
+          {
+            "value": "redis",
+            "steps": [
+              {
+                "name": "Set Redis Defaults",
+                "description": "Set Redis namespace and service name",
+                "step_type": "Conditional",
+                "command": "",
+                "continue_on_error": false,
+                "conditional": {
+                  "condition": {
+                    "expression": "true",
+                    "variable": "k8s_service"
+                  },
+                  "then_block": {
+                    "steps": [
+                      {
+                        "name": "Set Redis Values",
+                        "description": "Set values for Redis service",
+                        "step_type": "Command",
+                        "command": "export namespace=\"{{ env }}-redis\" && export k8s_service=\"redis-{{ env }}\" && export default_inside_port=\"6379\" && export default_outside_port=\"6380\"",
+                        "continue_on_error": false
+                      }
+                    ]
+                  },
+                  "else_block": null,
+                  "action": null
+                }
+              }
+            ]
+          }
+        ],
+        "default_case": [
+          {
+            "name": "Set Default Service",
+            "description": "Use service name as is and current namespace",
+            "step_type": "Conditional",
+            "command": "",
+            "continue_on_error": false,
+            "conditional": {
+              "condition": {
+                "expression": "true",
+                "variable": "k8s_service"
+              },
+              "then_block": {
+                "steps": [
+                  {
+                    "name": "Get Current Namespace",
+                    "description": "Get the current namespace from kubectl",
+                    "step_type": "Command",
+                    "command": "export namespace=$(kubectl config view --minify --output 'jsonpath={..namespace}') && export k8s_service=\"{{ service }}\"",
+                    "continue_on_error": false
+                  }
+                ]
+              },
+              "else_block": null,
+              "action": null
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Set Ports",
+      "description": "Set ports based on defaults or provided values",
+      "step_type": "Conditional",
+      "command": "",
+      "continue_on_error": false,
+      "conditional": {
+        "condition": {
+          "expression": "[ -z \"$inside_port\" ] && [ -n \"$default_inside_port\" ]",
+          "variable": null
+        },
+        "then_block": {
+          "steps": [
+            {
+              "name": "Use Default Inside Port",
+              "description": "Use the default inside port",
+              "step_type": "Command",
+              "command": "export inside_port=\"$default_inside_port\"",
+              "continue_on_error": false
+            }
+          ]
+        },
+        "else_block": null,
+        "action": null
+      }
+    },
+    {
+      "name": "Set Outside Port",
+      "description": "Set outside port based on defaults or provided values",
+      "step_type": "Conditional",
+      "command": "",
+      "continue_on_error": false,
+      "conditional": {
+        "condition": {
+          "expression": "[ -z \"$outside_port\" ] && [ -n \"$default_outside_port\" ]",
+          "variable": null
+        },
+        "then_block": {
+          "steps": [
+            {
+              "name": "Use Default Outside Port",
+              "description": "Use the default outside port",
+              "step_type": "Command",
+              "command": "export outside_port=\"$default_outside_port\"",
+              "continue_on_error": false
+            }
+          ]
+        },
+        "else_block": {
+          "steps": [
+            {
+              "name": "Use Inside Port for Outside",
+              "description": "If no outside port specified, use the inside port",
+              "step_type": "Conditional",
+              "command": "",
+              "continue_on_error": false,
+              "conditional": {
+                "condition": {
+                  "expression": "[ -z \"$outside_port\" ] && [ -n \"$inside_port\" ]",
+                  "variable": null
+                },
+                "then_block": {
+                  "steps": [
+                    {
+                      "name": "Copy Inside Port to Outside",
+                      "description": "Use the inside port as the outside port",
+                      "step_type": "Command",
+                      "command": "export outside_port=\"$inside_port\"",
+                      "continue_on_error": false
+                    }
+                  ]
+                },
+                "else_block": null,
+                "action": null
+              }
+            }
+          ]
+        },
+        "action": null
+      }
+    },
+    {
+      "name": "Validate Ports",
+      "description": "Check if we have valid ports to use",
+      "step_type": "Conditional",
+      "command": "",
+      "continue_on_error": false,
+      "conditional": {
+        "condition": {
+          "expression": "[ -z \"$inside_port\" ]",
+          "variable": null
+        },
+        "then_block": {
+          "steps": [
+            {
+              "name": "Missing Inside Port",
+              "description": "Display error about missing inside port",
+              "step_type": "Command",
+              "command": "echo \"Error: Inside port not specified and no default available for service '{{ service }}'\"",
+              "continue_on_error": false
+            }
+          ]
+        },
+        "else_block": {
+          "steps": [
+            {
+              "name": "Connect to Service",
+              "description": "Use kubectl port-forward to connect to the service",
+              "step_type": "Command",
+              "command": "echo \"Connecting to $k8s_service in namespace $namespace\" && echo \"Port forwarding from localhost:$outside_port to $k8s_service:$inside_port\" && kubectl port-forward --namespace \"$namespace\" \"svc/$k8s_service\" \"$outside_port:$inside_port\"",
+              "continue_on_error": false
+            }
+          ]
+        },
+        "action": null
+      }
+    }
+  ],
+  "tags": ["kubernetes", "port-forward", "gcloud", "devops"]
+}
