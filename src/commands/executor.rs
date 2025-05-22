@@ -75,9 +75,8 @@ impl CommandExecutor {
 
             if !should_continue {
                 println!(
-                    "{} {}",
-                    "Error:".red().bold(),
-                    "Command failed, stopping workflow"
+                    "{} Command failed, stopping workflow",
+                    "Error:".red().bold()
                 );
                 break;
             }
