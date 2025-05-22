@@ -14,4 +14,4 @@ pub use models::{
     WorkflowVariableProfile,
 };
 pub use variables::{VariableProcessor, WorkflowContext};
-pub use workflow_validator::{WorkflowValidator, ValidationReport, ValidationIssue, Severity};
+pub use workflow_validator::{Severity, ValidationIssue, ValidationReport, WorkflowValidator};

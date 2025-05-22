@@ -1,8 +1,8 @@
-use crate::commands::models::{BranchCase, Condition, Workflow, WorkflowStep, WorkflowVariable, ConditionalAction};
+use crate::commands::models::{BranchCase, Condition, Workflow, WorkflowStep, WorkflowVariable};
 use crate::error::{ClixError, Result};
 use regex::Regex;
-use std::fs;
 use std::collections::HashMap;
+use std::fs;
 
 pub struct FunctionConverter;
 
@@ -51,6 +51,12 @@ pub struct CaseEntry {
     pub commands: Vec<ShellStatement>,
 }
 
+impl Default for ShellParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ShellParser {
     pub fn new() -> Self {
         Self {
@@ -65,7 +71,7 @@ impl ShellParser {
 
         while i < lines.len() {
             let line = lines[i].trim();
-            
+
             if line.is_empty() || line.starts_with('#') {
                 i += 1;
                 continue;
@@ -81,7 +87,11 @@ impl ShellParser {
         Ok(statements)
     }
 
-    fn parse_statement(&mut self, lines: &[&str], start: usize) -> Result<(Option<ShellStatement>, usize)> {
+    fn parse_statement(
+        &mut self,
+        lines: &[&str],
+        start: usize,
+    ) -> Result<(Option<ShellStatement>, usize)> {
         let line = lines[start].trim();
 
         // Parse if statements
@@ -118,34 +128,51 @@ impl ShellParser {
         Ok((Some(ShellStatement::Command(line.to_string())), 1))
     }
 
-    fn parse_if_statement(&mut self, lines: &[&str], start: usize) -> Result<(Option<ShellStatement>, usize)> {
+    fn parse_if_statement(
+        &mut self,
+        lines: &[&str],
+        start: usize,
+    ) -> Result<(Option<ShellStatement>, usize)> {
         let mut i = start;
         let condition_line = lines[i].trim();
-        
+
         // Extract condition from "if [condition]; then" or "if [condition]\nthen"
         let condition = if condition_line.ends_with("; then") {
-            condition_line[3..condition_line.len() - 6].trim().to_string()
-        } else if condition_line.starts_with("if ") {
+            if let Some(stripped) = condition_line
+                .strip_prefix("if ")
+                .and_then(|s| s.strip_suffix("; then"))
+            {
+                stripped.trim().to_string()
+            } else {
+                return Err(ClixError::InvalidCommandFormat(
+                    "Invalid if statement".to_string(),
+                ));
+            }
+        } else if let Some(stripped) = condition_line.strip_prefix("if ") {
             // Look for "then" on next line
             i += 1;
             if i < lines.len() && lines[i].trim() == "then" {
-                condition_line[3..].trim().to_string()
+                stripped.trim().to_string()
             } else {
-                return Err(ClixError::InvalidCommandFormat("Malformed if statement".to_string()));
+                return Err(ClixError::InvalidCommandFormat(
+                    "Malformed if statement".to_string(),
+                ));
             }
         } else {
-            return Err(ClixError::InvalidCommandFormat("Invalid if statement".to_string()));
+            return Err(ClixError::InvalidCommandFormat(
+                "Invalid if statement".to_string(),
+            ));
         };
 
         i += 1; // Move past the "then"
-        
+
         let mut then_block = Vec::new();
         let mut else_block = None;
 
         // Parse then block
         while i < lines.len() {
             let line = lines[i].trim();
-            
+
             if line == "else" {
                 // Start of else block
                 i += 1;
@@ -166,7 +193,7 @@ impl ShellParser {
             } else if line == "fi" {
                 break;
             }
-            
+
             let (stmt, consumed) = self.parse_statement(lines, i)?;
             if let Some(statement) = stmt {
                 then_block.push(statement);
@@ -177,41 +204,53 @@ impl ShellParser {
         // Skip the "fi"
         i += 1;
 
-        Ok((Some(ShellStatement::If {
-            condition,
-            then_block,
-            else_block,
-        }), i - start))
+        Ok((
+            Some(ShellStatement::If {
+                condition,
+                then_block,
+                else_block,
+            }),
+            i - start,
+        ))
     }
 
-    fn parse_case_statement(&mut self, lines: &[&str], start: usize) -> Result<(Option<ShellStatement>, usize)> {
+    fn parse_case_statement(
+        &mut self,
+        lines: &[&str],
+        start: usize,
+    ) -> Result<(Option<ShellStatement>, usize)> {
         let mut i = start;
         let case_line = lines[i].trim();
-        
-        // Extract variable from "case $var in"
-        let variable = if let Some(captures) = Regex::new(r"case\s+(\$?\w+)\s+in").unwrap().captures(case_line) {
+
+        // Extract variable from "case $var in" or "case "$var" in"
+        let variable = if let Some(captures) = Regex::new(r#"case\s+"?(\$?\w+)"?\s+in"#)
+            .unwrap()
+            .captures(case_line)
+        {
             captures.get(1).unwrap().as_str().replace("$", "")
         } else {
-            return Err(ClixError::InvalidCommandFormat("Invalid case statement".to_string()));
+            return Err(ClixError::InvalidCommandFormat(
+                "Invalid case statement".to_string(),
+            ));
         };
 
         i += 1; // Move past "case ... in"
-        
+
         let mut cases = Vec::new();
         let mut default_case = None;
 
         while i < lines.len() {
             let line = lines[i].trim();
-            
+
             if line == "esac" {
                 break;
             }
 
             // Parse case entry "pattern)"
-            if line.ends_with(')') {
-                let pattern = line[..line.len() - 1].trim().to_string();
+            if let Some(pattern_str) = line.strip_suffix(')') {
+                let pattern = pattern_str.trim().to_string();
                 i += 1;
-                
+
                 let mut commands = Vec::new();
                 while i < lines.len() {
                     let line = lines[i].trim();
@@ -222,20 +261,20 @@ impl ShellParser {
                         i -= 1; // Back up so outer loop catches esac
                         break;
                     }
-                    
+
                     let (stmt, consumed) = self.parse_statement(lines, i)?;
                     if let Some(statement) = stmt {
                         commands.push(statement);
                     }
                     i += consumed;
                 }
-                
+
                 if pattern == "*" {
                     default_case = Some(commands);
                 } else {
                     cases.push(CaseEntry { pattern, commands });
                 }
-                
+
                 i += 1; // Skip ";;"
             } else {
                 i += 1;
@@ -244,25 +283,38 @@ impl ShellParser {
 
         i += 1; // Skip "esac"
 
-        Ok((Some(ShellStatement::Case {
-            variable,
-            cases,
-            default_case,
-        }), i - start))
+        Ok((
+            Some(ShellStatement::Case {
+                variable,
+                cases,
+                default_case,
+            }),
+            i - start,
+        ))
     }
 
-    fn parse_for_loop(&mut self, lines: &[&str], start: usize) -> Result<(Option<ShellStatement>, usize)> {
+    fn parse_for_loop(
+        &mut self,
+        lines: &[&str],
+        start: usize,
+    ) -> Result<(Option<ShellStatement>, usize)> {
         let mut i = start;
         let for_line = lines[i].trim();
-        
+
         // Extract variable and items from "for var in items; do" or "for var in items"
-        let (variable, items) = if let Some(captures) = Regex::new(r"for\s+(\w+)\s+in\s+(.+?)(?:;\s*do)?$").unwrap().captures(for_line) {
+        let (variable, items) = if let Some(captures) =
+            Regex::new(r"for\s+(\w+)\s+in\s+(.+?)(?:;\s*do)?$")
+                .unwrap()
+                .captures(for_line)
+        {
             (
                 captures.get(1).unwrap().as_str().to_string(),
-                captures.get(2).unwrap().as_str().to_string()
+                captures.get(2).unwrap().as_str().to_string(),
             )
         } else {
-            return Err(ClixError::InvalidCommandFormat("Invalid for loop".to_string()));
+            return Err(ClixError::InvalidCommandFormat(
+                "Invalid for loop".to_string(),
+            ));
         };
 
         // Check if "do" is on next line
@@ -271,21 +323,23 @@ impl ShellParser {
             if i < lines.len() && lines[i].trim() == "do" {
                 // Good, continue
             } else {
-                return Err(ClixError::InvalidCommandFormat("Missing 'do' in for loop".to_string()));
+                return Err(ClixError::InvalidCommandFormat(
+                    "Missing 'do' in for loop".to_string(),
+                ));
             }
         }
 
         i += 1; // Move past "do"
-        
+
         let mut body = Vec::new();
 
         while i < lines.len() {
             let line = lines[i].trim();
-            
+
             if line == "done" {
                 break;
             }
-            
+
             let (stmt, consumed) = self.parse_statement(lines, i)?;
             if let Some(statement) = stmt {
                 body.push(statement);
@@ -295,40 +349,55 @@ impl ShellParser {
 
         i += 1; // Skip "done"
 
-        Ok((Some(ShellStatement::For {
-            variable,
-            items,
-            body,
-        }), i - start))
+        Ok((
+            Some(ShellStatement::For {
+                variable,
+                items,
+                body,
+            }),
+            i - start,
+        ))
     }
 
-    fn parse_while_loop(&mut self, lines: &[&str], start: usize) -> Result<(Option<ShellStatement>, usize)> {
+    fn parse_while_loop(
+        &mut self,
+        lines: &[&str],
+        start: usize,
+    ) -> Result<(Option<ShellStatement>, usize)> {
         let mut i = start;
         let while_line = lines[i].trim();
-        
+
         // Extract condition from "while [condition]; do" or "while [condition]"
         let condition = if while_line.ends_with("; do") {
-            while_line[6..while_line.len() - 4].trim().to_string()
+            if let Some(stripped) = while_line.strip_suffix("; do") {
+                stripped[6..].trim().to_string()
+            } else {
+                return Err(ClixError::InvalidCommandFormat(
+                    "Invalid while loop".to_string(),
+                ));
+            }
         } else {
             i += 1;
             if i < lines.len() && lines[i].trim() == "do" {
                 while_line[6..].trim().to_string()
             } else {
-                return Err(ClixError::InvalidCommandFormat("Missing 'do' in while loop".to_string()));
+                return Err(ClixError::InvalidCommandFormat(
+                    "Missing 'do' in while loop".to_string(),
+                ));
             }
         };
 
         i += 1; // Move past "do"
-        
+
         let mut body = Vec::new();
 
         while i < lines.len() {
             let line = lines[i].trim();
-            
+
             if line == "done" {
                 break;
             }
-            
+
             let (stmt, consumed) = self.parse_statement(lines, i)?;
             if let Some(statement) = stmt {
                 body.push(statement);
@@ -338,58 +407,71 @@ impl ShellParser {
 
         i += 1; // Skip "done"
 
-        Ok((Some(ShellStatement::While {
-            condition,
-            body,
-        }), i - start))
+        Ok((Some(ShellStatement::While { condition, body }), i - start))
     }
 
     fn parse_variable_assignment(&mut self, line: &str) -> Result<(Option<ShellStatement>, usize)> {
         if let Some((name, value)) = line.split_once('=') {
             let name = name.trim().to_string();
             let value = value.trim().trim_matches('"').to_string();
-            
+
             self.variables.insert(name.clone(), value.clone());
-            
-            Ok((Some(ShellStatement::Variable {
-                name,
-                value,
-                local: false,
-            }), 1))
+
+            Ok((
+                Some(ShellStatement::Variable {
+                    name,
+                    value,
+                    local: false,
+                }),
+                1,
+            ))
         } else {
             Ok((Some(ShellStatement::Command(line.to_string())), 1))
         }
     }
 
     fn parse_local_variable(&mut self, line: &str) -> Result<(Option<ShellStatement>, usize)> {
-        let var_part = line[6..].trim(); // Remove "local "
-        
+        let var_part = if let Some(stripped) = line.strip_prefix("local ") {
+            stripped.trim()
+        } else {
+            return Err(ClixError::InvalidCommandFormat(
+                "Invalid local variable".to_string(),
+            ));
+        };
+
         if let Some((name, value)) = var_part.split_once('=') {
             let name = name.trim().to_string();
             let value = value.trim().trim_matches('"').to_string();
-            
+
             self.variables.insert(name.clone(), value.clone());
-            
-            Ok((Some(ShellStatement::Variable {
-                name,
-                value,
-                local: true,
-            }), 1))
+
+            Ok((
+                Some(ShellStatement::Variable {
+                    name,
+                    value,
+                    local: true,
+                }),
+                1,
+            ))
         } else {
             // Just a local declaration without assignment
-            Ok((Some(ShellStatement::Variable {
-                name: var_part.to_string(),
-                value: String::new(),
-                local: true,
-            }), 1))
+            Ok((
+                Some(ShellStatement::Variable {
+                    name: var_part.to_string(),
+                    value: String::new(),
+                    local: true,
+                }),
+                1,
+            ))
         }
     }
 }
 
 impl AstBuilder {
+    #[allow(clippy::only_used_in_recursion)]
     pub fn build_steps(&self, statements: Vec<ShellStatement>) -> Result<Vec<WorkflowStep>> {
         let mut steps = Vec::new();
-        
+
         for statement in statements {
             match statement {
                 ShellStatement::Command(cmd) => {
@@ -400,7 +482,11 @@ impl AstBuilder {
                         false,
                     ));
                 }
-                ShellStatement::If { condition, then_block, else_block } => {
+                ShellStatement::If {
+                    condition,
+                    then_block,
+                    else_block,
+                } => {
                     let then_steps = self.build_steps(then_block)?;
                     let else_steps = if let Some(else_block) = else_block {
                         Some(self.build_steps(else_block)?)
@@ -420,9 +506,13 @@ impl AstBuilder {
                         None,
                     ));
                 }
-                ShellStatement::Case { variable, cases, default_case } => {
+                ShellStatement::Case {
+                    variable,
+                    cases,
+                    default_case,
+                } => {
                     let mut branch_cases = Vec::new();
-                    
+
                     for case_entry in cases {
                         let case_steps = self.build_steps(case_entry.commands)?;
                         branch_cases.push(BranchCase {
@@ -445,9 +535,13 @@ impl AstBuilder {
                         default_steps,
                     ));
                 }
-                ShellStatement::For { variable, items, body } => {
+                ShellStatement::For {
+                    variable,
+                    items,
+                    body,
+                } => {
                     let loop_body = self.build_steps(body)?;
-                    
+
                     // Convert for loop to while loop logic
                     steps.push(WorkflowStep::new_loop(
                         "For Loop".to_string(),
@@ -461,7 +555,7 @@ impl AstBuilder {
                 }
                 ShellStatement::While { condition, body } => {
                     let loop_body = self.build_steps(body)?;
-                    
+
                     steps.push(WorkflowStep::new_loop(
                         "While Loop".to_string(),
                         format!("Loop while: {}", condition),
@@ -479,9 +573,19 @@ impl AstBuilder {
                         if value.is_empty() {
                             format!("# Declare {} variable {}", scope, name)
                         } else {
-                            format!("{}{}=\"{}\"", if local { "local " } else { "" }, name, value)
+                            format!(
+                                "{}{}=\"{}\"",
+                                if local { "local " } else { "" },
+                                name,
+                                value
+                            )
                         },
-                        format!("Set {} variable {} to {}", scope, name, if value.is_empty() { "unset" } else { &value }),
+                        format!(
+                            "Set {} variable {} to {}",
+                            scope,
+                            name,
+                            if value.is_empty() { "unset" } else { &value }
+                        ),
                         false,
                     ));
                 }
@@ -545,7 +649,7 @@ impl FunctionConverter {
     pub fn convert_with_full_parsing(function_content: &str) -> Result<Vec<WorkflowStep>> {
         let mut parser = ShellParser::new();
         let statements = parser.parse_function(function_content)?;
-        
+
         let ast_builder = AstBuilder;
         ast_builder.build_steps(statements)
     }
@@ -553,11 +657,11 @@ impl FunctionConverter {
     /// Extract function parameters as workflow variables
     fn extract_function_variables(function_content: &str) -> Result<Vec<WorkflowVariable>> {
         let mut variables = Vec::new();
-        
+
         // Look for parameter references like $1, $2, etc.
         let param_regex = Regex::new(r"\$(\d+)").unwrap();
         let mut max_param = 0;
-        
+
         for captures in param_regex.captures_iter(function_content) {
             if let Some(param_match) = captures.get(1) {
                 if let Ok(param_num) = param_match.as_str().parse::<usize>() {
@@ -579,14 +683,15 @@ impl FunctionConverter {
         // Look for other variable references
         let var_regex = Regex::new(r"\$([A-Za-z_][A-Za-z0-9_]*)").unwrap();
         let mut found_vars = std::collections::HashSet::new();
-        
+
         for captures in var_regex.captures_iter(function_content) {
             if let Some(var_match) = captures.get(1) {
                 let var_name = var_match.as_str();
                 // Skip special variables and positional parameters
-                if !var_name.chars().all(|c| c.is_ascii_digit()) 
-                   && !["@", "*", "#", "?", "$", "!", "0"].contains(&var_name)
-                   && found_vars.insert(var_name.to_string()) {
+                if !var_name.chars().all(|c| c.is_ascii_digit())
+                    && !["@", "*", "#", "?", "$", "!", "0"].contains(&var_name)
+                    && found_vars.insert(var_name.to_string())
+                {
                     variables.push(WorkflowVariable::new(
                         var_name.to_string(),
                         format!("Shell variable: {}", var_name),
@@ -625,6 +730,7 @@ impl FunctionConverter {
     }
 
     /// Parse the function body into workflow steps
+    #[allow(dead_code)]
     fn parse_function_to_steps(
         function_body: String,
         function_name: &str,
@@ -669,6 +775,7 @@ impl FunctionConverter {
     }
 
     /// Create a step for parameter handling
+    #[allow(dead_code)]
     fn create_parameter_step(_function_body: &str) -> Result<WorkflowStep> {
         // This is a simplified implementation - in reality, you'd want to
         // extract actual parameter definitions and convert them to workflow variables
@@ -682,6 +789,7 @@ impl FunctionConverter {
     }
 
     /// Extract conditionals from the function body
+    #[allow(dead_code)]
     fn extract_conditionals(function_body: &str) -> Result<Vec<WorkflowStep>> {
         let mut conditionals = Vec::new();
 
@@ -735,6 +843,7 @@ impl FunctionConverter {
     }
 
     /// Extract case statements from the function body
+    #[allow(dead_code)]
     fn extract_case_statements(function_body: &str) -> Result<Vec<WorkflowStep>> {
         let mut case_steps = Vec::new();
 
@@ -798,6 +907,7 @@ impl FunctionConverter {
     }
 
     /// Extract commands from the function body
+    #[allow(dead_code)]
     fn extract_commands(function_body: &str) -> Result<Vec<WorkflowStep>> {
         let mut command_steps = Vec::new();
 
@@ -906,11 +1016,25 @@ simple_test() {{
         assert_eq!(workflow.tags.len(), 1);
         assert_eq!(workflow.tags[0], "test");
 
-        // Verify some steps
-        assert!(workflow.steps.iter().any(|s| s.name.contains("Start")));
-        assert!(workflow.steps.iter().any(|s| s.name.contains("Parameters")));
+        // Verify some steps exist
+        assert!(!workflow.steps.is_empty());
 
-        // The test should validate that we have at least some steps, not necessarily conditionals
-        assert!(workflow.steps.len() >= 2);
+        // Verify that the new parser creates the expected steps
+        assert!(workflow.steps.iter().any(|s| s.name.contains("echo")));
+        assert!(
+            workflow
+                .steps
+                .iter()
+                .any(|s| s.name.contains("local variable"))
+        );
+        assert!(
+            workflow
+                .steps
+                .iter()
+                .any(|s| s.name.contains("Conditional"))
+        );
+
+        // The test should validate that we have at least 4 steps (echo, variable, conditional, echo)
+        assert!(workflow.steps.len() >= 4);
     }
 }

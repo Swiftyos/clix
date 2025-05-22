@@ -34,7 +34,7 @@ impl Storage {
 
         let store_path = store_dir.join("commands.json");
 
-        Ok(Storage { 
+        Ok(Storage {
             store_path,
             cache: RefCell::new(None),
         })
@@ -77,6 +77,7 @@ impl Storage {
     }
 
     /// Load store without caching (for when we need fresh data)
+    #[allow(dead_code)]
     fn load_direct(&self) -> Result<CommandStore> {
         if !self.store_path.exists() {
             return Ok(CommandStore::new());
@@ -90,7 +91,7 @@ impl Storage {
     pub fn save(&self, store: &CommandStore) -> Result<()> {
         let content = serde_json::to_string_pretty(store)?;
         fs::write(&self.store_path, content)?;
-        
+
         // Update cache with new data
         let file_modified = fs::metadata(&self.store_path)?.modified()?;
         let mut cache = self.cache.borrow_mut();
@@ -99,11 +100,12 @@ impl Storage {
             last_modified: file_modified,
             dirty: false,
         });
-        
+
         Ok(())
     }
 
     /// Mark cache as dirty without saving (for bulk operations)
+    #[allow(dead_code)]
     fn mark_cache_dirty(&self) {
         let mut cache = self.cache.borrow_mut();
         if let Some(ref mut cached) = *cache {
@@ -112,6 +114,7 @@ impl Storage {
     }
 
     /// Save and update cache atomically
+    #[allow(dead_code)]
     fn save_and_update_cache(&self, store: &CommandStore) -> Result<()> {
         self.save(store)
     }

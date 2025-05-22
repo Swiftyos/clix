@@ -9,8 +9,8 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
 use std::thread;
+use std::time::{Duration, Instant};
 
 const CLAUDE_API_URL: &str = "https://api.anthropic.com/v1/messages";
 const CLAUDE_MODELS_URL: &str = "https://api.anthropic.com/v1/models";
@@ -38,7 +38,7 @@ impl RateLimiter {
         }
     }
 
-    pub fn default() -> Self {
+    pub fn with_defaults() -> Self {
         Self::new(DEFAULT_REQUESTS_PER_MINUTE, DEFAULT_TOKENS_PER_MINUTE)
     }
 
@@ -50,17 +50,19 @@ impl RateLimiter {
         {
             let mut request_times = self.request_times.lock().unwrap();
             request_times.retain(|&time| time > one_minute_ago);
-            
+
             if request_times.len() >= self.requests_per_minute as usize {
                 let wait_time = request_times[0] + Duration::from_secs(60) - now;
                 if wait_time > Duration::from_secs(0) {
-                    println!("{} Rate limit reached. Waiting {} seconds...", 
-                            "Clix:".yellow().bold(), 
-                            wait_time.as_secs());
+                    println!(
+                        "{} Rate limit reached. Waiting {} seconds...",
+                        "Clix:".yellow().bold(),
+                        wait_time.as_secs()
+                    );
                     thread::sleep(wait_time);
                 }
             }
-            
+
             request_times.push(now);
         }
 
@@ -68,21 +70,23 @@ impl RateLimiter {
         {
             let mut token_usage = self.token_usage.lock().unwrap();
             token_usage.retain(|(time, _)| *time > one_minute_ago);
-            
+
             let current_tokens: u32 = token_usage.iter().map(|(_, tokens)| tokens).sum();
-            
+
             if current_tokens + estimated_tokens > self.tokens_per_minute {
                 if let Some((oldest_time, _)) = token_usage.first() {
                     let wait_time = *oldest_time + Duration::from_secs(60) - now;
                     if wait_time > Duration::from_secs(0) {
-                        println!("{} Token rate limit reached. Waiting {} seconds...", 
-                                "Clix:".yellow().bold(), 
-                                wait_time.as_secs());
+                        println!(
+                            "{} Token rate limit reached. Waiting {} seconds...",
+                            "Clix:".yellow().bold(),
+                            wait_time.as_secs()
+                        );
                         thread::sleep(wait_time);
                     }
                 }
             }
-            
+
             token_usage.push((now, estimated_tokens));
         }
 
@@ -125,9 +129,7 @@ impl RetryableError {
         match self {
             RetryableError::RateLimit => config.retry_on_rate_limit,
             RetryableError::NetworkError => config.retry_on_network_error,
-            RetryableError::ServerError(status) => {
-                config.retry_on_server_error && *status >= 500
-            }
+            RetryableError::ServerError(status) => config.retry_on_server_error && *status >= 500,
             RetryableError::Timeout => config.retry_on_network_error,
         }
     }
@@ -241,7 +243,7 @@ impl ClaudeAssistant {
             client,
             api_key,
             settings,
-            rate_limiter: RateLimiter::default(),
+            rate_limiter: RateLimiter::with_defaults(),
             retry_config: RetryConfig::default(),
         })
     }
@@ -252,7 +254,12 @@ impl ClaudeAssistant {
         command_history: Vec<&Command>,
         workflow_history: Vec<&Workflow>,
     ) -> Result<(String, ClaudeAction)> {
-        self.ask_with_retry(question, command_history, workflow_history, &self.retry_config)
+        self.ask_with_retry(
+            question,
+            command_history,
+            workflow_history,
+            &self.retry_config,
+        )
     }
 
     pub fn ask_with_retry(
@@ -263,30 +270,32 @@ impl ClaudeAssistant {
         retry_config: &RetryConfig,
     ) -> Result<(String, ClaudeAction)> {
         let mut last_error: Option<RetryableError> = None;
-        
+
         for attempt in 0..=retry_config.max_retries {
             if attempt > 0 {
                 if let Some(ref error) = last_error {
                     if !error.should_retry(retry_config) {
                         break;
                     }
-                    
+
                     let delay = if retry_config.exponential_backoff {
                         retry_config.base_delay_ms * (2_u64.pow(attempt - 1))
                     } else {
                         retry_config.base_delay_ms
                     };
-                    
-                    println!("{} Retrying in {} seconds... (attempt {}/{})", 
-                            "Clix:".yellow().bold(), 
-                            delay / 1000, 
-                            attempt, 
-                            retry_config.max_retries);
-                    
+
+                    println!(
+                        "{} Retrying in {} seconds... (attempt {}/{})",
+                        "Clix:".yellow().bold(),
+                        delay / 1000,
+                        attempt,
+                        retry_config.max_retries
+                    );
+
                     thread::sleep(Duration::from_millis(delay));
                 }
             }
-            
+
             match self.ask_internal(question, &command_history, &workflow_history) {
                 Ok(result) => return Ok(result),
                 Err(e) => {
@@ -297,7 +306,7 @@ impl ClaudeAssistant {
                 }
             }
         }
-        
+
         Err(ClixError::ApiError("Max retries exceeded".to_string()))
     }
 
@@ -311,12 +320,12 @@ impl ClaudeAssistant {
 
         // Estimate tokens (rough estimation)
         let estimated_tokens = (question.len() / 4) as u32 + 1000; // Rough token estimation
-        
+
         // Apply rate limiting
         self.rate_limiter.check_and_wait(estimated_tokens)?;
 
         // Create system prompt
-        let system_prompt = self.create_system_prompt(&command_history, &workflow_history);
+        let system_prompt = self.create_system_prompt(command_history, workflow_history);
 
         // Create user message
         let user_message = Message {
@@ -400,7 +409,11 @@ impl ClaudeAssistant {
             ClixError::ApiError(msg) => {
                 if msg.contains("rate_limit") || msg.contains("429") {
                     RetryableError::RateLimit
-                } else if msg.contains("500") || msg.contains("502") || msg.contains("503") || msg.contains("504") {
+                } else if msg.contains("500")
+                    || msg.contains("502")
+                    || msg.contains("503")
+                    || msg.contains("504")
+                {
                     // Extract status code if possible
                     if let Some(status) = self.extract_status_code(msg) {
                         RetryableError::ServerError(status)

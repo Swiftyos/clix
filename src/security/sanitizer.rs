@@ -45,7 +45,9 @@ impl CommandSanitizer {
                     result.push(ch);
                 }
                 // Dangerous characters that should be escaped if not in quotes
-                ';' | '|' | '&' | '$' | '`' | '(' | ')' | '<' | '>' if !in_single_quote && !in_double_quote => {
+                ';' | '|' | '&' | '$' | '`' | '(' | ')' | '<' | '>'
+                    if !in_single_quote && !in_double_quote =>
+                {
                     // Only escape if it looks suspicious (not part of legitimate command)
                     if Self::is_suspicious_metachar(ch, &mut chars) {
                         result.push('\\');
@@ -102,7 +104,7 @@ impl CommandSanitizer {
     pub fn sanitize_variable_name(name: &str) -> Result<String> {
         // Variable names should only contain alphanumeric characters and underscores
         let re = Regex::new(r"^[a-zA-Z_][a-zA-Z0-9_]*$").unwrap();
-        
+
         if !re.is_match(name) {
             return Err(ClixError::SecurityError(format!(
                 "Invalid variable name: {}. Variable names must start with a letter or underscore and contain only alphanumeric characters and underscores.",
@@ -156,13 +158,7 @@ impl CommandSanitizer {
 
         // Check for absolute paths to sensitive directories
         let sensitive_prefixes = [
-            "/etc/",
-            "/var/",
-            "/sys/",
-            "/proc/",
-            "/dev/",
-            "/boot/",
-            "/root/",
+            "/etc/", "/var/", "/sys/", "/proc/", "/dev/", "/boot/", "/root/",
         ];
 
         for prefix in &sensitive_prefixes {
@@ -179,9 +175,7 @@ impl CommandSanitizer {
 
         // Limit length
         if sanitized.len() > 256 {
-            return Err(ClixError::SecurityError(
-                "File path too long".to_string(),
-            ));
+            return Err(ClixError::SecurityError("File path too long".to_string()));
         }
 
         Ok(sanitized)
@@ -205,9 +199,7 @@ impl CommandSanitizer {
 
         // Limit length
         if sanitized.len() > 2048 {
-            return Err(ClixError::SecurityError(
-                "Input too long".to_string(),
-            ));
+            return Err(ClixError::SecurityError("Input too long".to_string()));
         }
 
         Ok(sanitized)
@@ -217,9 +209,7 @@ impl CommandSanitizer {
     pub fn sanitize_json_input(json_str: &str) -> Result<String> {
         // Basic length check
         if json_str.len() > 10_000 {
-            return Err(ClixError::SecurityError(
-                "JSON input too large".to_string(),
-            ));
+            return Err(ClixError::SecurityError("JSON input too large".to_string()));
         }
 
         // Try to parse JSON to ensure it's valid

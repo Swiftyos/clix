@@ -1,5 +1,5 @@
 use clap::{CommandFactory, Parser};
-use clap_complete::{generate, Shell as CompletionShell};
+use clap_complete::{Shell as CompletionShell, generate};
 use colored::Colorize;
 use std::collections::HashMap;
 use std::fs;
@@ -19,7 +19,7 @@ use clix::{ClaudeAssistant, SettingsManager};
 fn main() {
     if let Err(e) = run() {
         eprintln!("{}", e.to_user_friendly_message());
-        
+
         // Show suggestions if available
         let suggestions = e.get_suggestions();
         if !suggestions.is_empty() {
@@ -28,7 +28,7 @@ fn main() {
                 eprintln!("  • {}", suggestion);
             }
         }
-        
+
         exit(1);
     }
 }
@@ -370,14 +370,16 @@ fn run() -> Result<()> {
             // Handle the new conditional and branch commands
             FlowCommands::AddCondition(args) => {
                 use clix::commands::models::{Condition, ConditionalAction, WorkflowStep};
-                
+
                 // Read steps from JSON files
                 let then_steps_json = fs::read_to_string(&args.then_file).map_err(ClixError::Io)?;
-                let then_steps: Vec<WorkflowStep> = serde_json::from_str(&then_steps_json).map_err(ClixError::Serialization)?;
-                
+                let then_steps: Vec<WorkflowStep> =
+                    serde_json::from_str(&then_steps_json).map_err(ClixError::Serialization)?;
+
                 let else_steps = if let Some(else_file) = &args.else_file {
                     let else_steps_json = fs::read_to_string(else_file).map_err(ClixError::Io)?;
-                    let steps: Vec<WorkflowStep> = serde_json::from_str(&else_steps_json).map_err(ClixError::Serialization)?;
+                    let steps: Vec<WorkflowStep> =
+                        serde_json::from_str(&else_steps_json).map_err(ClixError::Serialization)?;
                     Some(steps)
                 } else {
                     None
@@ -394,10 +396,12 @@ fn run() -> Result<()> {
                             let return_code = args.return_code.unwrap_or(0);
                             Some(ConditionalAction::Return(return_code))
                         }
-                        _ => return Err(ClixError::InvalidCommandFormat(format!(
-                            "Invalid action '{}'. Valid actions: run_then, run_else, continue, break, return",
-                            action_str
-                        ))),
+                        _ => {
+                            return Err(ClixError::InvalidCommandFormat(format!(
+                                "Invalid action '{}'. Valid actions: run_then, run_else, continue, break, return",
+                                action_str
+                            )));
+                        }
                     }
                 } else {
                     None
@@ -433,15 +437,17 @@ fn run() -> Result<()> {
             }
             FlowCommands::AddBranch(args) => {
                 use clix::commands::models::{BranchCase, WorkflowStep};
-                
+
                 // Read cases from JSON file
                 let cases_json = fs::read_to_string(&args.cases_file).map_err(ClixError::Io)?;
-                let cases: Vec<BranchCase> = serde_json::from_str(&cases_json).map_err(ClixError::Serialization)?;
-                
+                let cases: Vec<BranchCase> =
+                    serde_json::from_str(&cases_json).map_err(ClixError::Serialization)?;
+
                 // Read default case if provided
                 let default_case = if let Some(default_file) = &args.default_file {
                     let default_json = fs::read_to_string(default_file).map_err(ClixError::Io)?;
-                    let steps: Vec<WorkflowStep> = serde_json::from_str(&default_json).map_err(ClixError::Serialization)?;
+                    let steps: Vec<WorkflowStep> =
+                        serde_json::from_str(&default_json).map_err(ClixError::Serialization)?;
                     Some(steps)
                 } else {
                     None

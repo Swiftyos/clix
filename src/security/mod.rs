@@ -1,5 +1,5 @@
-pub mod validator;
 pub mod sanitizer;
+pub mod validator;
 
-pub use validator::{SecurityValidator, SecurityConfig};
 pub use sanitizer::CommandSanitizer;
+pub use validator::{SecurityConfig, SecurityValidator};

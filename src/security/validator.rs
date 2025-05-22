@@ -1,7 +1,8 @@
 use crate::commands::models::{Workflow, WorkflowStep};
-use crate::error::{ClixError, Result};
+use crate::error::Result;
 use regex::Regex;
 use std::collections::HashSet;
+use std::sync::OnceLock;
 
 pub struct SecurityValidator {
     dangerous_commands: HashSet<String>,
@@ -44,7 +45,7 @@ impl Default for SecurityConfig {
 impl SecurityValidator {
     pub fn new(config: SecurityConfig) -> Self {
         let mut dangerous_commands = HashSet::new();
-        
+
         // Add commonly dangerous commands
         dangerous_commands.insert("rm".to_string());
         dangerous_commands.insert("rmdir".to_string());
@@ -57,21 +58,27 @@ impl SecurityValidator {
         dangerous_commands.insert("halt".to_string());
         dangerous_commands.insert("poweroff".to_string());
         dangerous_commands.insert("init".to_string());
-        
+
         // Compile dangerous patterns
-        let dangerous_patterns = vec![
-            Regex::new(r"rm\s+-[rf]+.*[\*/]").unwrap(), // rm -rf with wildcards or root
-            Regex::new(r">\s*/dev/(?:sda|sdb|sdc|hda|hdb)").unwrap(), // Writing to disk devices
-            Regex::new(r":\(\)\s*\{.*;\s*\}").unwrap(), // Fork bombs
-            Regex::new(r"while\s+true.*do").unwrap(), // Infinite loops
-            Regex::new(r"curl.*\|\s*(?:sh|bash|zsh)").unwrap(), // Piping downloads to shell
-            Regex::new(r"wget.*\|\s*(?:sh|bash|zsh)").unwrap(), // Piping downloads to shell
-            Regex::new(r"echo.*>\s*/etc/").unwrap(), // Writing to system config
-            Regex::new(r"chmod\s+[0-7]*7[0-7]*\s+/").unwrap(), // Making system files executable
-        ];
+        static DANGEROUS_PATTERNS: OnceLock<Vec<Regex>> = OnceLock::new();
+        let dangerous_patterns = DANGEROUS_PATTERNS
+            .get_or_init(|| {
+                vec![
+                    Regex::new(r"rm\s+-[rf]+.*[\*/]").unwrap(), // rm -rf with wildcards or root
+                    Regex::new(r">\s*/dev/(?:sda|sdb|sdc|hda|hdb)").unwrap(), // Writing to disk devices
+                    Regex::new(r":\(\)\s*\{.*;\s*\}").unwrap(),               // Fork bombs
+                    Regex::new(r"while\s+true.*do").unwrap(),                 // Infinite loops
+                    Regex::new(r"curl.*\|\s*(?:sh|bash|zsh)").unwrap(), // Piping downloads to shell
+                    Regex::new(r"wget.*\|\s*(?:sh|bash|zsh)").unwrap(), // Piping downloads to shell
+                    Regex::new(r"echo.*>\s*/etc/").unwrap(),            // Writing to system config
+                    Regex::new(r"chmod\s+[0-7]*7[0-7]*\s+/").unwrap(), // Making system files executable
+                ]
+            })
+            .clone();
 
         // Compile approval requirement patterns
-        let require_approval_patterns: Vec<Regex> = config.require_approval_for_patterns
+        let require_approval_patterns: Vec<Regex> = config
+            .require_approval_for_patterns
             .iter()
             .filter_map(|pattern| Regex::new(pattern).ok())
             .collect();
@@ -156,15 +163,15 @@ impl SecurityValidator {
         // Validate each step
         for step in &workflow.steps {
             let step_report = self.validate_workflow_step(step)?;
-            
+
             if !step_report.is_safe {
                 all_issues.extend(step_report.issues.iter().cloned());
             }
-            
+
             if step_report.requires_approval {
                 requires_approval = true;
             }
-            
+
             step_reports.push(step_report);
         }
 
@@ -192,7 +199,7 @@ impl SecurityValidator {
         if !step.command.is_empty() {
             let command_check = self.validate_command(&step.command)?;
             issues.extend(command_check.issues);
-            
+
             if command_check.requires_approval {
                 requires_approval = true;
             }
@@ -264,18 +271,21 @@ impl SecurityValidator {
     /// Extract workflow calls from a workflow
     fn extract_workflow_calls(&self, workflow: &Workflow) -> Vec<String> {
         let mut calls = Vec::new();
-        
+        static WORKFLOW_CALL_REGEX: OnceLock<Regex> = OnceLock::new();
+        let regex =
+            WORKFLOW_CALL_REGEX.get_or_init(|| Regex::new(r"clix\s+flow\s+run\s+(\w+)").unwrap());
+
         for step in &workflow.steps {
             if step.command.contains("clix flow run") {
                 // Extract workflow name from "clix flow run workflow_name"
-                if let Some(captures) = Regex::new(r"clix\s+flow\s+run\s+(\w+)").unwrap().captures(&step.command) {
+                if let Some(captures) = regex.captures(&step.command) {
                     if let Some(workflow_name) = captures.get(1) {
                         calls.push(workflow_name.as_str().to_string());
                     }
                 }
             }
         }
-        
+
         calls
     }
 
@@ -291,7 +301,10 @@ impl SecurityValidator {
         let mut recommendations = Vec::new();
 
         if command.contains("rm") {
-            recommendations.push("Consider using 'trash' command instead of 'rm' for safer file deletion".to_string());
+            recommendations.push(
+                "Consider using 'trash' command instead of 'rm' for safer file deletion"
+                    .to_string(),
+            );
         }
 
         if command.contains("sudo") {
@@ -299,11 +312,16 @@ impl SecurityValidator {
         }
 
         if command.contains("curl") || command.contains("wget") {
-            recommendations.push("Verify the source URL and consider using --fail-with-body for curl".to_string());
+            recommendations.push(
+                "Verify the source URL and consider using --fail-with-body for curl".to_string(),
+            );
         }
 
         if command.contains(">") && !command.contains(">>") {
-            recommendations.push("Consider using '>>' for append instead of '>' to avoid overwriting files".to_string());
+            recommendations.push(
+                "Consider using '>>' for append instead of '>' to avoid overwriting files"
+                    .to_string(),
+            );
         }
 
         if command.contains("chmod 777") {
@@ -342,12 +360,12 @@ pub struct WorkflowSecurityReport {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commands::models::{WorkflowStep, StepType};
+    use crate::commands::models::WorkflowStep;
 
     #[test]
     fn test_dangerous_command_detection() {
         let validator = SecurityValidator::new(SecurityConfig::default());
-        
+
         let dangerous_commands = vec![
             "rm -rf /",
             "dd if=/dev/zero of=/dev/sda",
@@ -358,14 +376,18 @@ mod tests {
 
         for cmd in dangerous_commands {
             let result = validator.validate_command(cmd).unwrap();
-            assert!(!result.is_safe, "Command should be flagged as unsafe: {}", cmd);
+            assert!(
+                !result.is_safe,
+                "Command should be flagged as unsafe: {}",
+                cmd
+            );
         }
     }
 
     #[test]
     fn test_safe_command_detection() {
         let validator = SecurityValidator::new(SecurityConfig::default());
-        
+
         let safe_commands = vec![
             "echo 'Hello World'",
             "ls -la",
@@ -383,22 +405,23 @@ mod tests {
     #[test]
     fn test_approval_requirement() {
         let validator = SecurityValidator::new(SecurityConfig::default());
-        
-        let approval_commands = vec![
-            "sudo apt update",
-            "rm -rf temp/",
-        ];
+
+        let approval_commands = vec!["sudo apt update", "rm -rf temp/"];
 
         for cmd in approval_commands {
             let result = validator.validate_command(cmd).unwrap();
-            assert!(result.requires_approval, "Command should require approval: {}", cmd);
+            assert!(
+                result.requires_approval,
+                "Command should require approval: {}",
+                cmd
+            );
         }
     }
 
     #[test]
     fn test_workflow_validation() {
         let validator = SecurityValidator::new(SecurityConfig::default());
-        
+
         let steps = vec![
             WorkflowStep::new_command(
                 "Safe step".to_string(),

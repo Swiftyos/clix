@@ -1,8 +1,8 @@
-use crate::commands::models::{Workflow, WorkflowStep, StepType};
-use crate::error::{ClixError, Result};
+use crate::commands::models::{StepType, Workflow, WorkflowStep};
+use crate::error::Result;
 use crate::storage::Storage;
-use std::collections::{HashMap, HashSet, VecDeque};
 use regex::Regex;
+use std::collections::{HashMap, HashSet, VecDeque};
 
 pub struct WorkflowValidator {
     storage: Storage,
@@ -96,7 +96,11 @@ impl WorkflowValidator {
         // Check for indirect circular dependencies
         for called_workflow in &workflow_calls {
             if let Ok(called_wf) = self.storage.get_workflow(called_workflow) {
-                if self.has_circular_dependency_to(&called_wf, &workflow.name, &mut HashSet::new())? {
+                if self.has_circular_dependency_to(
+                    &called_wf,
+                    &workflow.name,
+                    &mut HashSet::new(),
+                )? {
                     issues.push(ValidationIssue {
                         severity: Severity::Error,
                         message: format!(
@@ -104,7 +108,9 @@ impl WorkflowValidator {
                             workflow.name, called_workflow, workflow.name
                         ),
                         step_name: None,
-                        suggestion: Some("Restructure workflows to eliminate circular calls".to_string()),
+                        suggestion: Some(
+                            "Restructure workflows to eliminate circular calls".to_string(),
+                        ),
                     });
                 }
             }
@@ -128,6 +134,7 @@ impl WorkflowValidator {
     }
 
     /// Extract workflow calls from a single step (handles nested structures)
+    #[allow(clippy::only_used_in_recursion)]
     fn extract_workflow_calls_from_step(
         &self,
         step: &WorkflowStep,
@@ -191,7 +198,7 @@ impl WorkflowValidator {
         visited.insert(workflow.name.clone());
 
         let calls = self.extract_all_workflow_calls(workflow)?;
-        
+
         if calls.contains(&target.to_string()) {
             return Ok(true);
         }
@@ -211,14 +218,17 @@ impl WorkflowValidator {
     /// Check for unreachable steps in the workflow
     fn check_unreachable_steps(&self, workflow: &Workflow, issues: &mut Vec<ValidationIssue>) {
         let reachable = self.find_reachable_steps(workflow);
-        
+
         for (index, step) in workflow.steps.iter().enumerate() {
             if !reachable.contains(&index) {
                 issues.push(ValidationIssue {
                     severity: Severity::Warning,
                     message: format!("Step '{}' may be unreachable", step.name),
                     step_name: Some(step.name.clone()),
-                    suggestion: Some("Check if this step can be reached through normal execution flow".to_string()),
+                    suggestion: Some(
+                        "Check if this step can be reached through normal execution flow"
+                            .to_string(),
+                    ),
                 });
             }
         }
@@ -228,7 +238,7 @@ impl WorkflowValidator {
     fn find_reachable_steps(&self, workflow: &Workflow) -> HashSet<usize> {
         let mut reachable = HashSet::new();
         let mut to_visit = VecDeque::new();
-        
+
         // Start from the first step
         if !workflow.steps.is_empty() {
             to_visit.push_back(0);
@@ -290,7 +300,10 @@ impl WorkflowValidator {
 
     /// Find the index of a step by name
     fn find_step_index(&self, workflow: &Workflow, step_name: &str) -> Option<usize> {
-        workflow.steps.iter().position(|step| step.name == step_name)
+        workflow
+            .steps
+            .iter()
+            .position(|step| step.name == step_name)
     }
 
     /// Validate variable consistency throughout the workflow
@@ -334,7 +347,12 @@ impl WorkflowValidator {
     }
 
     /// Collect used variables from a step and its nested structures
-    fn collect_used_variables_from_step(&self, step: &WorkflowStep, used_vars: &mut HashSet<String>) {
+    #[allow(clippy::only_used_in_recursion)]
+    fn collect_used_variables_from_step(
+        &self,
+        step: &WorkflowStep,
+        used_vars: &mut HashSet<String>,
+    ) {
         let var_regex = Regex::new(r"\$\{(\w+)\}|\$(\w+)").unwrap();
 
         // Check main command
@@ -351,11 +369,11 @@ impl WorkflowValidator {
                     used_vars.insert(var_name.as_str().to_string());
                 }
             }
-            
+
             for then_step in &conditional.then_block.steps {
                 self.collect_used_variables_from_step(then_step, used_vars);
             }
-            
+
             if let Some(else_block) = &conditional.else_block {
                 for else_step in &else_block.steps {
                     self.collect_used_variables_from_step(else_step, used_vars);
@@ -366,13 +384,13 @@ impl WorkflowValidator {
         // Check branch blocks
         if let Some(branch) = &step.branch {
             used_vars.insert(branch.variable.clone());
-            
+
             for case in &branch.cases {
                 for case_step in &case.steps {
                     self.collect_used_variables_from_step(case_step, used_vars);
                 }
             }
-            
+
             if let Some(default_steps) = &branch.default_case {
                 for default_step in default_steps {
                     self.collect_used_variables_from_step(default_step, used_vars);
@@ -387,7 +405,7 @@ impl WorkflowValidator {
                     used_vars.insert(var_name.as_str().to_string());
                 }
             }
-            
+
             for loop_step in &loop_data.steps {
                 self.collect_used_variables_from_step(loop_step, used_vars);
             }
@@ -396,7 +414,10 @@ impl WorkflowValidator {
 
     /// Check if a variable is a built-in system variable
     fn is_builtin_variable(&self, var_name: &str) -> bool {
-        matches!(var_name, "HOME" | "USER" | "PATH" | "PWD" | "SHELL" | "TERM")
+        matches!(
+            var_name,
+            "HOME" | "USER" | "PATH" | "PWD" | "SHELL" | "TERM"
+        )
     }
 
     /// Validate step metadata (names, descriptions)
@@ -416,7 +437,9 @@ impl WorkflowValidator {
                     severity: Severity::Warning,
                     message: format!("Step '{}' has empty description", step.name),
                     step_name: Some(step.name.clone()),
-                    suggestion: Some("Add a description to explain what this step does".to_string()),
+                    suggestion: Some(
+                        "Add a description to explain what this step does".to_string(),
+                    ),
                 });
             }
 
@@ -436,10 +459,14 @@ impl WorkflowValidator {
         for step in &workflow.steps {
             if let Some(loop_data) = &step.loop_data {
                 // Check for obvious infinite loop conditions
-                if loop_data.condition.expression == "true" || loop_data.condition.expression == "1" {
+                if loop_data.condition.expression == "true" || loop_data.condition.expression == "1"
+                {
                     issues.push(ValidationIssue {
                         severity: Severity::Error,
-                        message: format!("Step '{}' contains an infinite loop condition", step.name),
+                        message: format!(
+                            "Step '{}' contains an infinite loop condition",
+                            step.name
+                        ),
                         step_name: Some(step.name.clone()),
                         suggestion: Some("Add a proper exit condition to the loop".to_string()),
                     });
@@ -499,7 +526,9 @@ impl WorkflowValidator {
                     severity: Severity::Error,
                     message: format!(
                         "Duplicate step name '{}' found at positions {} and {}",
-                        step.name, first_index + 1, index + 1
+                        step.name,
+                        first_index + 1,
+                        index + 1
                     ),
                     step_name: Some(step.name.clone()),
                     suggestion: Some("Use unique names for all steps".to_string()),
@@ -528,7 +557,10 @@ impl WorkflowValidator {
                 if step.command.contains("rm -rf /") {
                     issues.push(ValidationIssue {
                         severity: Severity::Warning,
-                        message: format!("Step '{}' contains potentially dangerous command", step.name),
+                        message: format!(
+                            "Step '{}' contains potentially dangerous command",
+                            step.name
+                        ),
                         step_name: Some(step.name.clone()),
                         suggestion: Some("Review this command carefully for safety".to_string()),
                     });
@@ -564,7 +596,7 @@ impl WorkflowValidator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commands::models::{WorkflowStep, StepType, WorkflowVariable};
+    use crate::commands::models::{WorkflowStep, WorkflowVariable};
     use tempfile::tempdir;
 
     #[test]
@@ -589,10 +621,13 @@ mod tests {
 
         let report = validator.validate_workflow(&workflow).unwrap();
         assert!(!report.is_valid);
-        assert!(report.issues.iter().any(|issue| 
-            issue.severity == Severity::Error && 
-            issue.message.contains("calls itself directly")
-        ));
+        assert!(
+            report
+                .issues
+                .iter()
+                .any(|issue| issue.severity == Severity::Error
+                    && issue.message.contains("calls itself directly"))
+        );
     }
 
     #[test]
@@ -624,10 +659,13 @@ mod tests {
 
         let report = validator.validate_workflow(&workflow).unwrap();
         assert!(!report.is_valid);
-        assert!(report.issues.iter().any(|issue| 
-            issue.severity == Severity::Error && 
-            issue.message.contains("Duplicate step name")
-        ));
+        assert!(
+            report
+                .issues
+                .iter()
+                .any(|issue| issue.severity == Severity::Error
+                    && issue.message.contains("Duplicate step name"))
+        );
     }
 
     #[test]
@@ -658,15 +696,21 @@ mod tests {
         );
 
         let report = validator.validate_workflow(&workflow).unwrap();
-        
+
         // Should have warning about undefined variable and info about unused variable
-        assert!(report.issues.iter().any(|issue| 
-            issue.severity == Severity::Warning && 
-            issue.message.contains("UNDEFINED_VAR")
-        ));
-        assert!(report.issues.iter().any(|issue| 
-            issue.severity == Severity::Info && 
-            issue.message.contains("DEFINED_VAR")
-        ));
+        assert!(
+            report
+                .issues
+                .iter()
+                .any(|issue| issue.severity == Severity::Warning
+                    && issue.message.contains("UNDEFINED_VAR"))
+        );
+        assert!(
+            report
+                .issues
+                .iter()
+                .any(|issue| issue.severity == Severity::Info
+                    && issue.message.contains("DEFINED_VAR"))
+        );
     }
 }
