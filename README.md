@@ -8,6 +8,7 @@ A command-line tool for developers to store and execute commands and workflows.
 - Create and run complex workflows (e.g., troubleshooting production issues)
 - Tag commands and workflows for better organization
 - Track command usage statistics
+- Export and import commands to share with your team
 - Simple and intuitive CLI interface
 
 ## Installation
@@ -82,6 +83,26 @@ clix add-workflow my-workflow --description "My workflow" --steps-file workflow.
 
 ```bash
 clix run-workflow my-workflow
+```
+
+### Exporting commands and workflows
+
+```bash
+# Export all commands and workflows
+clix export --output my-commands.json
+
+# Export with filtering
+clix export --output deploy-commands.json --tag deploy
+```
+
+### Importing commands and workflows
+
+```bash
+# Import from a file
+clix import --input team-commands.json
+
+# Import and overwrite existing commands
+clix import --input team-commands.json --overwrite
 ```
 
 ## License

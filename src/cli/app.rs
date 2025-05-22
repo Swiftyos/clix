@@ -26,6 +26,12 @@ pub enum Commands {
     
     /// Run a stored workflow
     RunWorkflow(RunWorkflowArgs),
+    
+    /// Export commands and workflows to a file
+    Export(ExportArgs),
+    
+    /// Import commands and workflows from a file
+    Import(ImportArgs),
 }
 
 #[derive(Args, Debug)]
@@ -87,4 +93,34 @@ pub struct AddWorkflowArgs {
 pub struct RunWorkflowArgs {
     /// Name of the workflow to run
     pub name: String,
+}
+
+#[derive(Args, Debug)]
+pub struct ExportArgs {
+    /// Output file path
+    #[arg(short, long)]
+    pub output: String,
+    
+    /// Export only commands with specific tag
+    #[arg(short, long)]
+    pub tag: Option<String>,
+    
+    /// Export commands only (no workflows)
+    #[arg(long)]
+    pub commands_only: bool,
+    
+    /// Export workflows only (no commands)
+    #[arg(long)]
+    pub workflows_only: bool,
+}
+
+#[derive(Args, Debug)]
+pub struct ImportArgs {
+    /// Input file path
+    #[arg(short, long)]
+    pub input: String,
+    
+    /// Overwrite existing commands with the same name
+    #[arg(short, long)]
+    pub overwrite: bool,
 }

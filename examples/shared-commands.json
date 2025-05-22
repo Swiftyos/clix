@@ -1,0 +1,58 @@
+{
+  "version": "0.1.0",
+  "metadata": {
+    "exported_at": 1684756234,
+    "exported_by": "developer1",
+    "description": "Exported all commands and workflows: team-shared"
+  },
+  "commands": {
+    "deploy-prod": {
+      "name": "deploy-prod",
+      "description": "Deploy to production environment",
+      "command": "kubectl apply -f k8s/production/ && kubectl rollout status deployment/app",
+      "created_at": 1684756000,
+      "last_used": 1684756100,
+      "use_count": 5,
+      "tags": ["deploy", "production", "team-shared"]
+    },
+    "deploy-staging": {
+      "name": "deploy-staging",
+      "description": "Deploy to staging environment",
+      "command": "kubectl apply -f k8s/staging/ && kubectl rollout status deployment/app-staging",
+      "created_at": 1684756000,
+      "last_used": 1684756150,
+      "use_count": 12,
+      "tags": ["deploy", "staging", "team-shared"]
+    }
+  },
+  "workflows": {
+    "troubleshoot-prod": {
+      "name": "troubleshoot-prod",
+      "description": "Troubleshoot production issues",
+      "steps": [
+        {
+          "name": "Check Pod Status",
+          "command": "kubectl get pods -n production",
+          "description": "Check the status of all pods in production namespace",
+          "continue_on_error": true
+        },
+        {
+          "name": "Get Recent Logs",
+          "command": "kubectl logs -n production deployment/app --tail=50",
+          "description": "Get the most recent 50 log entries from the app",
+          "continue_on_error": true
+        },
+        {
+          "name": "Check Node Status",
+          "command": "kubectl describe nodes",
+          "description": "Get detailed information about cluster nodes",
+          "continue_on_error": true
+        }
+      ],
+      "created_at": 1684756000,
+      "last_used": 1684756200,
+      "use_count": 3,
+      "tags": ["troubleshooting", "production", "team-shared"]
+    }
+  }
+}

@@ -78,6 +78,38 @@ clix add-workflow my-workflow --description "Basic system info workflow" --steps
 clix run-workflow my-workflow
 ```
 
+## Sharing Commands and Workflows
+
+### Exporting Commands and Workflows
+
+You can export your commands and workflows to share with your team:
+
+```bash
+# Export all commands and workflows
+clix export --output my-commands.json
+
+# Export only commands with a specific tag
+clix export --output deploy-commands.json --tag deploy
+
+# Export only commands (no workflows)
+clix export --output commands-only.json --commands-only
+
+# Export only workflows (no commands)
+clix export --output workflows-only.json --workflows-only
+```
+
+### Importing Commands and Workflows
+
+You can import commands and workflows that were exported by another user:
+
+```bash
+# Import commands and workflows
+clix import --input my-commands.json
+
+# Import and overwrite any existing commands with the same name
+clix import --input team-commands.json --overwrite
+```
+
 ## Examples
 
 ### Cloud Service Troubleshooting Workflow
