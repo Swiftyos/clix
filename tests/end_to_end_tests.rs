@@ -34,6 +34,7 @@ impl AsyncTestContext for E2ETestContext {
             fs::create_dir_all(&temp_dir).unwrap();
 
             // Temporarily set HOME environment variable to our test directory
+            // SAFETY: Setting HOME for test isolation is safe in this context
             unsafe {
                 env::set_var("HOME", &temp_dir);
             }
@@ -242,23 +243,19 @@ async fn test_workflow_variables_and_profiles(ctx: &mut E2ETestContext) {
     let dev_profile = WorkflowVariableProfile::new(
         "development".to_string(),
         "Development environment profile".to_string(),
-        {
-            let mut vars = HashMap::new();
-            vars.insert("ENV".to_string(), "dev".to_string());
-            vars.insert("DEBUG".to_string(), "true".to_string());
-            vars
-        },
+        HashMap::from([
+            ("ENV".to_string(), "dev".to_string()),
+            ("DEBUG".to_string(), "true".to_string()),
+        ]),
     );
 
     let prod_profile = WorkflowVariableProfile::new(
         "production".to_string(),
         "Production environment profile".to_string(),
-        {
-            let mut vars = HashMap::new();
-            vars.insert("ENV".to_string(), "prod".to_string());
-            vars.insert("DEBUG".to_string(), "false".to_string());
-            vars
-        },
+        HashMap::from([
+            ("ENV".to_string(), "prod".to_string()),
+            ("DEBUG".to_string(), "false".to_string()),
+        ]),
     );
 
     workflow.add_profile(dev_profile);
@@ -281,12 +278,10 @@ async fn test_workflow_variables_and_profiles(ctx: &mut E2ETestContext) {
     }
 
     // Test running workflow with custom variables
-    let custom_vars = {
-        let mut vars = HashMap::new();
-        vars.insert("ENV".to_string(), "staging".to_string());
-        vars.insert("DEBUG".to_string(), "true".to_string());
-        vars
-    };
+    let custom_vars = HashMap::from([
+        ("ENV".to_string(), "staging".to_string()),
+        ("DEBUG".to_string(), "true".to_string()),
+    ]);
 
     let results = CommandExecutor::execute_workflow(&workflow, None, Some(custom_vars)).unwrap();
     assert_eq!(results.len(), 2);
@@ -356,22 +351,14 @@ async fn test_conditional_workflows(ctx: &mut E2ETestContext) {
     ctx.storage.add_workflow(workflow.clone()).unwrap();
 
     // Test running workflow with dev environment
-    let dev_vars = {
-        let mut vars = HashMap::new();
-        vars.insert("ENV".to_string(), "dev".to_string());
-        vars
-    };
+    let dev_vars = HashMap::from([("ENV".to_string(), "dev".to_string())]);
 
     let results = CommandExecutor::execute_workflow(&workflow, None, Some(dev_vars)).unwrap();
     // Should execute the conditional step which executes the "then" block
     assert!(results.len() >= 1);
 
     // Test running workflow with prod environment
-    let prod_vars = {
-        let mut vars = HashMap::new();
-        vars.insert("ENV".to_string(), "prod".to_string());
-        vars
-    };
+    let prod_vars = HashMap::from([("ENV".to_string(), "prod".to_string())]);
 
     let results = CommandExecutor::execute_workflow(&workflow, None, Some(prod_vars)).unwrap();
     // Should execute the conditional step which executes the "else" block
@@ -435,31 +422,19 @@ async fn test_branch_workflows(ctx: &mut E2ETestContext) {
     ctx.storage.add_workflow(workflow.clone()).unwrap();
 
     // Test running workflow with document type
-    let doc_vars = {
-        let mut vars = HashMap::new();
-        vars.insert("ITEM_TYPE".to_string(), "document".to_string());
-        vars
-    };
+    let doc_vars = HashMap::from([("ITEM_TYPE".to_string(), "document".to_string())]);
 
     let results = CommandExecutor::execute_workflow(&workflow, None, Some(doc_vars)).unwrap();
     assert!(results.len() >= 1);
 
     // Test running workflow with image type
-    let img_vars = {
-        let mut vars = HashMap::new();
-        vars.insert("ITEM_TYPE".to_string(), "image".to_string());
-        vars
-    };
+    let img_vars = HashMap::from([("ITEM_TYPE".to_string(), "image".to_string())]);
 
     let results = CommandExecutor::execute_workflow(&workflow, None, Some(img_vars)).unwrap();
     assert!(results.len() >= 1);
 
     // Test running workflow with unknown type (should use default case)
-    let unknown_vars = {
-        let mut vars = HashMap::new();
-        vars.insert("ITEM_TYPE".to_string(), "unknown".to_string());
-        vars
-    };
+    let unknown_vars = HashMap::from([("ITEM_TYPE".to_string(), "unknown".to_string())]);
 
     let results = CommandExecutor::execute_workflow(&workflow, None, Some(unknown_vars)).unwrap();
     assert!(results.len() >= 1);
@@ -601,6 +576,7 @@ async fn test_export_import_e2e(ctx: &mut E2ETestContext) {
     let import_temp_dir = ctx.temp_dir.join("import_test");
     fs::create_dir_all(&import_temp_dir).unwrap();
 
+    // SAFETY: Setting HOME for test isolation is safe in this context
     unsafe {
         env::set_var("HOME", &import_temp_dir);
     }
@@ -803,9 +779,8 @@ async fn test_comprehensive_integration(ctx: &mut E2ETestContext) {
                 "Validate Environment".to_string(),
                 "Check if environment is valid".to_string(),
                 Condition {
-                    expression:
-                        "[ \"$ENV\" = \"dev\" -o \"$ENV\" = \"staging\" -o \"$ENV\" = \"prod\" ]"
-                            .to_string(),
+                    expression: "[ \"$ENV\" = \"dev\" -o \"$ENV\" = \"staging\" -o \"$ENV\" = \"prod\" ]"
+                        .to_string(),
                     variable: None,
                 },
                 vec![WorkflowStep::new_command(
@@ -888,21 +863,13 @@ async fn test_comprehensive_integration(ctx: &mut E2ETestContext) {
     let workflow = ctx.storage.get_workflow("full-deployment").unwrap();
 
     // Test with dev environment
-    let dev_vars = {
-        let mut vars = HashMap::new();
-        vars.insert("ENV".to_string(), "dev".to_string());
-        vars
-    };
+    let dev_vars = HashMap::from([("ENV".to_string(), "dev".to_string())]);
 
     let results = CommandExecutor::execute_workflow(&workflow, None, Some(dev_vars)).unwrap();
     assert!(results.len() >= 3); // At least the conditional, branch, and deploy steps
 
     // Test with invalid environment (should fail due to return action)
-    let invalid_vars = {
-        let mut vars = HashMap::new();
-        vars.insert("ENV".to_string(), "invalid".to_string());
-        vars
-    };
+    let invalid_vars = HashMap::from([("ENV".to_string(), "invalid".to_string())]);
 
     // This should fail or return early due to the conditional with return action
     let invalid_results = CommandExecutor::execute_workflow(&workflow, None, Some(invalid_vars));
