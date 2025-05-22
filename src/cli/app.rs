@@ -30,6 +30,9 @@ pub enum Commands {
 
     /// Import commands and workflows from a file
     Import(ImportArgs),
+    
+    /// Ask Claude AI for help with creating and running commands
+    Ask(AskArgs),
 }
 
 #[derive(Subcommand, Debug)]
@@ -174,6 +177,12 @@ pub struct ImportArgs {
     /// Overwrite existing commands with the same name
     #[arg(short, long)]
     pub overwrite: bool,
+}
+
+#[derive(Args, Debug)]
+pub struct AskArgs {
+    /// The question or request for Claude
+    pub question: String,
 }
 
 #[derive(Args, Debug)]

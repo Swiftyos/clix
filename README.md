@@ -12,6 +12,7 @@ A command-line tool for developers to store and execute commands and workflows.
 - Tag commands and workflows for better organization
 - Track command usage statistics
 - Export and import commands to share with your team
+- AI-powered assistance for creating and running commands using Claude
 - Simple and intuitive CLI interface
 
 ## Installation
@@ -41,6 +42,7 @@ SUBCOMMANDS:
     flow       Workflow management commands (see below for subcommands)
     export     Export commands and workflows to a file
     import     Import commands and workflows from a file
+    ask        Ask Claude AI for help with creating and running commands
     help       Print this help message or help for a specific command
 ```
 
@@ -90,6 +92,38 @@ clix list --tag deployment
 ```bash
 clix remove my-command
 ```
+
+### Using Claude AI Assistant
+
+Clix integrates with Anthropic's Claude AI to help you create and run commands and workflows. The AI can suggest existing commands or workflows to run, or it can create new ones based on your request.
+
+#### Setup
+
+First, you need to set up your Anthropic API key:
+
+1. Get an API key from [Anthropic Console](https://console.anthropic.com/)
+2. Create a `.env` file in your clix directory (copy from `.env.example`)
+3. Add your API key to the `.env` file: `ANTHROPIC_API_KEY=your_api_key_here`
+
+#### Using the Ask Command
+
+```bash
+# Ask Claude for help with a command
+clix ask "How do I create a command to list files with details?"
+
+# Ask for help with a workflow
+clix ask "Create a workflow for deploying to AWS with authentication"
+
+# Ask for help finding and running existing commands
+clix ask "What command do I have for listing Docker containers?"
+```
+
+The Claude assistant will analyze your question and:
+1. Suggest an existing command or workflow to run
+2. Propose creating a new command or workflow
+3. Provide information or guidance
+
+When Claude suggests running a command or creating a new one, you'll be asked for confirmation before any action is taken.
 
 ## Working with Workflows
 
@@ -156,8 +190,6 @@ Example workflow file (gcloud-workflow.json):
 ```
 
 ### Managing workflows with the `flow` command
-
-Workflows can be managed using the `flow` subcommand, which has operations for adding, running, listing, and removing workflows.
 
 #### Adding a workflow
 
@@ -234,8 +266,6 @@ Variables make your workflows flexible and reusable across different environment
 
 In your workflow steps, use the `{{ variable_name }}` syntax to include variables:
 
-Workflows can include variables that are replaced at runtime. Variables are defined using the `{{ variable_name }}` syntax in workflow commands:
-
 ```json
 [
   {
@@ -262,10 +292,6 @@ When running the workflow, you'll be prompted to enter values for each variable 
 You can define variables with descriptions, default values, and requirements to provide better guidance for users:
 
 ```bash
-# Add a variable to a workflow
-clix flow add-var my-workflow --name project_name --description "GCloud project ID" --default "my-default-project"
-```
-
 # Add a required variable without a default value
 clix flow add-var my-workflow --name cluster_name --description "GKE cluster name" --required
 
@@ -291,8 +317,6 @@ clix flow run my-workflow --var project_name=my-project
 ### Variable Profiles
 
 Profiles allow you to save sets of variable values for different environments (like development, staging, production) or different configurations. This eliminates the need to repeatedly enter the same values when running a workflow:
-
-You can save sets of variable values as profiles for different environments:
 
 ```bash
 # Create a production profile
