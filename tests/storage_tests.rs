@@ -13,16 +13,24 @@ struct StorageContext {
 impl AsyncTestContext for StorageContext {
     fn setup<'a>() -> std::pin::Pin<Box<dyn std::future::Future<Output = Self> + Send + 'a>> {
         Box::pin(async {
-            // Create a temporary directory for tests
-            let temp_dir = std::env::temp_dir().join("clix_test").join(format!(
-                "test_{}",
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_micros()
-            ));
+            // Create a unique temporary directory for tests
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_micros();
 
+            let temp_dir = std::env::temp_dir()
+                .join("clix_test")
+                .join(format!("test_{}", timestamp));
             fs::create_dir_all(&temp_dir).unwrap();
+
+            // Ensure .clix directory exists
+            let clix_dir = temp_dir.join(".clix");
+            fs::create_dir_all(&clix_dir).unwrap();
+
+            // Create an empty commands.json file
+            let commands_file = clix_dir.join("commands.json");
+            fs::write(&commands_file, r#"{"commands":{},"workflows":{}}"#).unwrap();
 
             // Temporarily set HOME environment variable to our test directory
             unsafe {

@@ -92,7 +92,7 @@ fn test_auth_step_creation() {
     assert_eq!(auth_step.command, "gcloud auth login");
     assert_eq!(auth_step.description, "Login to Google Cloud");
     assert_eq!(auth_step.step_type, StepType::Auth);
-    assert_eq!(auth_step.continue_on_error, false);
+    assert!(!auth_step.continue_on_error);
 
     let command_step = WorkflowStep::new_command(
         "Command Step".to_string(),
@@ -102,5 +102,5 @@ fn test_auth_step_creation() {
     );
 
     assert_eq!(command_step.step_type, StepType::Command);
-    assert_eq!(command_step.continue_on_error, true);
+    assert!(command_step.continue_on_error);
 }
