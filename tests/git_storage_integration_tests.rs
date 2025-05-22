@@ -158,9 +158,7 @@ fn test_command_merge_behavior() {
     // Simulate merge logic (local takes precedence)
     let mut merged = local_commands.clone();
     for (name, command) in repo_commands {
-        if !merged.contains_key(&name) {
-            merged.insert(name, command);
-        }
+        merged.entry(name).or_insert(command);
     }
 
     assert_eq!(merged.len(), 2);
