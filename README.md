@@ -25,6 +25,42 @@ cd clix
 cargo install --path .
 ```
 
+## Command Reference
+
+Clix offers a comprehensive set of commands for managing both individual commands and complex workflows. Here's a complete reference of all available commands:
+
+```
+USAGE:
+    clix [SUBCOMMAND]
+
+SUBCOMMANDS:
+    add        Add a new command
+    run        Run a stored command
+    list       List all stored commands and workflows
+    remove     Remove a stored command
+    flow       Workflow management commands (see below for subcommands)
+    export     Export commands and workflows to a file
+    import     Import commands and workflows from a file
+    help       Print this help message or help for a specific command
+```
+
+Workflow-specific commands:
+
+```
+USAGE:
+    clix flow [SUBCOMMAND]
+
+SUBCOMMANDS:
+    add            Add a new workflow
+    run            Run a stored workflow
+    remove         Remove a stored workflow
+    list           List all stored workflows
+    add-var        Add a variable to a workflow
+    add-profile    Add a profile to a workflow
+    list-profiles  List profiles for a workflow
+    help           Print help for flow or a specific subcommand
+```
+
 ## Usage
 
 ### Adding a command
@@ -53,6 +89,70 @@ clix list --tag deployment
 
 ```bash
 clix remove my-command
+```
+
+## Working with Workflows
+
+Workflows allow you to define a sequence of steps that are executed in order. Each step can be a regular command or an authentication step that requires user interaction.
+
+### Creating Workflow Files
+
+Workflows are defined in JSON files. Each workflow is an array of step objects with the following structure:
+
+```json
+{
+  "name": "Step Name",                        // Required: A descriptive name for the step
+  "command": "command to execute",           // Required: The command to run
+  "description": "Description of the step",   // Required: A description of what the step does
+  "continue_on_error": true/false,          // Optional: Whether to continue if this step fails (default: false)
+  "step_type": "Command" or "Auth"           // Optional: The type of step (default: "Command")
+}
+```
+
+Step types:
+- `Command`: Regular command execution
+- `Auth`: Executes the command and pauses for user interaction, useful for authentication flows
+
+Example workflow file (gcloud-workflow.json):
+
+```json
+[
+  {
+    "name": "Set GCloud Project",
+    "command": "gcloud config set project {{ project_name }}",
+    "description": "Set the active GCloud project",
+    "continue_on_error": false,
+    "step_type": "Command"
+  },
+  {
+    "name": "Authenticate with GCloud",
+    "command": "gcloud auth login",
+    "description": "Login to Google Cloud",
+    "continue_on_error": false,
+    "step_type": "Auth"
+  },
+  {
+    "name": "Get Cluster Credentials",
+    "command": "gcloud container clusters get-credentials {{ cluster_name }} --zone={{ zone }}",
+    "description": "Fetch credentials for the specified GKE cluster",
+    "continue_on_error": false,
+    "step_type": "Command"
+  },
+  {
+    "name": "Set Kubernetes Namespace",
+    "command": "kubectl config set-context --current --namespace={{ namespace }}",
+    "description": "Set the default namespace for kubectl commands",
+    "continue_on_error": false,
+    "step_type": "Command"
+  },
+  {
+    "name": "List Pods",
+    "command": "kubectl get pods -n {{ namespace }}",
+    "description": "List all pods in the specified namespace",
+    "continue_on_error": true,
+    "step_type": "Command"
+  }
+]
 ```
 
 ### Managing workflows with the `flow` command
@@ -126,7 +226,13 @@ clix flow remove my-workflow
 ```
 
 
-#### Variables in Workflows
+### Variables in Workflows
+
+Variables make your workflows flexible and reusable across different environments. Clix supports template variables in workflow commands, allowing you to define values at runtime or use profiles for consistent environments.
+
+#### Variable Syntax
+
+In your workflow steps, use the `{{ variable_name }}` syntax to include variables:
 
 Workflows can include variables that are replaced at runtime. Variables are defined using the `{{ variable_name }}` syntax in workflow commands:
 
@@ -149,32 +255,73 @@ Workflows can include variables that are replaced at runtime. Variables are defi
 ]
 ```
 
-When running the workflow, you'll be prompted to enter values for each variable. You can also define default values and descriptions for variables:
+When running the workflow, you'll be prompted to enter values for each variable that appears in any step's command.
+
+#### Adding Variables to Workflows
+
+You can define variables with descriptions, default values, and requirements to provide better guidance for users:
 
 ```bash
 # Add a variable to a workflow
 clix flow add-var my-workflow --name project_name --description "GCloud project ID" --default "my-default-project"
 ```
 
-#### Variable Profiles
+# Add a required variable without a default value
+clix flow add-var my-workflow --name cluster_name --description "GKE cluster name" --required
+
+# Add an optional variable with a default value
+clix flow add-var my-workflow --name zone --description "GCP zone" --default "us-central1-a" 
+```
+
+#### Running Workflows with Variables
+
+There are multiple ways to provide variable values when running a workflow:
+
+```bash
+# Prompted for variables: You'll be asked for any missing values interactively
+clix flow run my-workflow
+
+# Command-line variables: Provide values directly in the command
+clix flow run my-workflow --var project_name=my-project --var cluster_name=prod-cluster
+
+# Mixed approach: Provide some values via command line, be prompted for others
+clix flow run my-workflow --var project_name=my-project
+```
+
+### Variable Profiles
+
+Profiles allow you to save sets of variable values for different environments (like development, staging, production) or different configurations. This eliminates the need to repeatedly enter the same values when running a workflow:
 
 You can save sets of variable values as profiles for different environments:
 
 ```bash
 # Create a production profile
-clix flow add-profile my-workflow --name prod --description "Production environment" --var project_name=prod-project --var cluster_name=prod-cluster --var zone=us-central1-a --var namespace=production
+clix flow add-profile my-workflow --name prod --description "Production environment" \
+  --var project_name=prod-project \
+  --var cluster_name=prod-cluster \
+  --var zone=us-central1-a \
+  --var namespace=production
 
 # Create a development profile
-clix flow add-profile my-workflow --name dev --description "Development environment" --var project_name=dev-project --var cluster_name=dev-cluster --var zone=us-central1-a --var namespace=development
+clix flow add-profile my-workflow --name dev --description "Development environment" \
+  --var project_name=dev-project \
+  --var cluster_name=dev-cluster \
+  --var zone=us-central1-a \
+  --var namespace=development
 
 # List all profiles for a workflow
 clix flow list-profiles my-workflow
 
 # Run a workflow with a specific profile
 clix flow run my-workflow --profile prod
+
+# Override specific profile values
+clix flow run my-workflow --profile prod --var cluster_name=prod-cluster-2
 ```
 
-#### Authentication Steps in Workflows
+Profiles make it easy to switch between environments without having to remember and type all the variable values each time.
+
+### Authentication Steps in Workflows
 
 Workflows can include authentication steps that require user interaction. For example, when running `gcloud auth login`, the user needs to follow a browser-based authentication flow. The workflow will pause after executing the auth command and wait for the user to press Enter before continuing:
 
