@@ -16,10 +16,10 @@ impl FunctionConverter {
     ) -> Result<Workflow> {
         // Read the shell script file
         let content = fs::read_to_string(file_path).map_err(|e| {
-            ClixError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to read script file: {}", e),
-            ))
+            ClixError::Io(std::io::Error::other(format!(
+                "Failed to read script file: {}",
+                e
+            )))
         })?;
 
         // Extract the function
