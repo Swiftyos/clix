@@ -756,4 +756,245 @@ Follow these guidelines:
         let input = input.trim().to_lowercase();
         Ok(input == "y" || input == "yes")
     }
+
+    pub fn ask_conversational(
+        &self,
+        question: &str,
+        session: &crate::ai::conversation::ConversationSession,
+        command_history: Vec<&Command>,
+        workflow_history: Vec<&Workflow>,
+    ) -> Result<(String, ClaudeAction)> {
+        println!("{} Asking Claude...", "Clix:".blue().bold());
+
+        // Estimate tokens (rough estimation)
+        let estimated_tokens = (question.len() / 4) as u32 + 2000; // More tokens for context
+
+        // Apply rate limiting
+        self.rate_limiter.check_and_wait(estimated_tokens)?;
+
+        // Create system prompt with conversation context
+        let system_prompt = self.create_conversational_system_prompt(session, &command_history, &workflow_history);
+
+        // Build conversation history
+        let mut messages = Vec::new();
+
+        // Add recent conversation history
+        let recent_messages = session.get_recent_context(10);
+        for msg in recent_messages {
+            let role = match msg.role {
+                crate::ai::conversation::MessageRole::User => "user",
+                crate::ai::conversation::MessageRole::Assistant => "assistant",
+                crate::ai::conversation::MessageRole::System => continue, // Skip system messages
+            };
+
+            messages.push(Message {
+                role: role.to_string(),
+                content: vec![RequestContent {
+                    content_type: "text".to_string(),
+                    text: msg.content.clone(),
+                }],
+            });
+        }
+
+        // Add current question
+        messages.push(Message {
+            role: "user".to_string(),
+            content: vec![RequestContent {
+                content_type: "text".to_string(),
+                text: question.to_string(),
+            }],
+        });
+
+        // Create request
+        let request = ClaudeRequest {
+            model: self.settings.ai_model.clone(),
+            max_tokens: self.settings.ai_settings.max_tokens,
+            temperature: self.settings.ai_settings.temperature,
+            messages,
+            system: system_prompt,
+        };
+
+        // Create headers
+        let mut headers = HeaderMap::new();
+        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+        headers.insert("x-api-key", HeaderValue::from_str(&self.api_key)?);
+        headers.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
+
+        // Make request
+        let response = self
+            .client
+            .post(CLAUDE_API_URL)
+            .headers(headers)
+            .json(&request)
+            .send()
+            .map_err(|e| {
+                ClixError::CommandExecutionFailed(format!("Failed to call Claude API: {}", e))
+            })?;
+
+        // Get the raw response body first
+        let raw_response = response.text().map_err(|e| {
+            ClixError::CommandExecutionFailed(format!("Failed to get raw response body: {}", e))
+        })?;
+
+        // Check if this is an error response
+        if raw_response.contains("\"type\":\"error\"") {
+            let error_response: ErrorResponse =
+                serde_json::from_str(&raw_response).map_err(|e| {
+                    ClixError::CommandExecutionFailed(format!(
+                        "Failed to parse error response: {}",
+                        e
+                    ))
+                })?;
+
+            return Err(ClixError::CommandExecutionFailed(format!(
+                "API Error: {} - {}",
+                error_response.error_type, error_response.error.message
+            )));
+        }
+
+        // Now parse the response as a successful response
+        let claude_response: ClaudeResponse = serde_json::from_str(&raw_response).map_err(|e| {
+            ClixError::CommandExecutionFailed(format!("Failed to parse Claude API response: {}", e))
+        })?;
+
+        // Extract text and suggested action
+        let text = claude_response
+            .content
+            .iter()
+            .map(|content| content.text.clone())
+            .collect::<Vec<String>>()
+            .join("\n");
+
+        let action = self.parse_conversational_action(&text, session)?;
+
+        Ok((text, action))
+    }
+
+    fn create_conversational_system_prompt(
+        &self,
+        session: &crate::ai::conversation::ConversationSession,
+        command_history: &[&Command],
+        workflow_history: &[&Workflow],
+    ) -> String {
+        let mut prompt = r#"You are ClaudeAssistant, an AI assistant integrated with the Clix command-line tool.
+You are currently in a conversation with a user who is working on creating or refining commands and workflows.
+
+This is a CONVERSATIONAL SESSION. You should:
+1. Remember the context from previous messages in this conversation
+2. Build upon previous discussions and decisions
+3. Ask clarifying questions when needed
+4. Help refine and improve workflows through back-and-forth discussion
+5. Be more interactive and collaborative than in single-shot requests
+
+CURRENT CONVERSATION STATE: "#.to_string();
+
+        // Add conversation state information
+        match &session.state {
+            crate::ai::conversation::ConversationState::Active => {
+                prompt.push_str("Active conversation - ready for any request\n");
+            }
+            crate::ai::conversation::ConversationState::WaitingForConfirmation => {
+                prompt.push_str("Waiting for user confirmation of a suggested action\n");
+            }
+            crate::ai::conversation::ConversationState::CreatingWorkflow(state) => {
+                prompt.push_str("Currently creating a workflow\n");
+                if let Some(name) = &state.name {
+                    prompt.push_str(&format!("  Workflow name: {}\n", name));
+                }
+                if let Some(desc) = &state.description {
+                    prompt.push_str(&format!("  Description: {}\n", desc));
+                }
+                prompt.push_str(&format!("  Steps defined so far: {}\n", state.steps.len()));
+            }
+            crate::ai::conversation::ConversationState::RefiningWorkflow(name) => {
+                prompt.push_str(&format!("Currently refining workflow: {}\n", name));
+            }
+            crate::ai::conversation::ConversationState::Completed => {
+                prompt.push_str("Conversation completed\n");
+            }
+        }
+
+        prompt.push_str(r#"
+Your response formats for conversational mode:
+
+1. For continuing conversation (asking questions, clarifications):
+[CONTINUE]
+Your response text with questions or clarifications...
+
+2. For workflow creation or refinement:
+[CREATE WORKFLOW]
+Name: workflow_name
+Description: description
+Steps:
+- Step 1: name="Step 1", command="command1", description="step description", continue_on_error=false, step_type="Command"
+...
+
+3. For suggesting to run existing items:
+[RUN COMMAND: command_name] or [RUN WORKFLOW: workflow_name]
+Explanation...
+
+4. For creating commands:
+[CREATE COMMAND]
+Name: command_name
+Description: description
+Command: shell_command
+
+5. For when conversation should end:
+[COMPLETE]
+Final summary or goodbye message...
+
+"#);
+
+        // Add available commands and workflows
+        if !command_history.is_empty() {
+            prompt.push_str("\nAvailable commands:\n");
+            for cmd in command_history {
+                prompt.push_str(&format!(
+                    "- {}: {}\n  Command: {}\n",
+                    cmd.name, cmd.description, cmd.command
+                ));
+            }
+        }
+
+        if !workflow_history.is_empty() {
+            prompt.push_str("\nAvailable workflows:\n");
+            for wf in workflow_history {
+                prompt.push_str(&format!(
+                    "- {}: {}\n  Steps: {}\n",
+                    wf.name,
+                    wf.description,
+                    wf.steps.len()
+                ));
+            }
+        }
+
+        prompt
+    }
+
+    fn parse_conversational_action(
+        &self,
+        text: &str,
+        session: &crate::ai::conversation::ConversationSession,
+    ) -> Result<ClaudeAction> {
+        // Check for conversation continuation
+        if regex::Regex::new(r"\[CONTINUE\]")
+            .unwrap()
+            .find(text)
+            .is_some()
+        {
+            return Ok(ClaudeAction::NoAction); // Continue conversation, no specific action
+        }
+
+        // Check for conversation completion
+        if regex::Regex::new(r"\[COMPLETE\]")
+            .unwrap()
+            .find(text)
+            .is_some()
+        {
+            return Ok(ClaudeAction::NoAction); // End conversation
+        }
+
+        // Use existing parsing logic for other actions
+        self.parse_action(text)
+    }
 }

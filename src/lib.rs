@@ -13,4 +13,4 @@ pub use commands::{Command, Workflow, WorkflowStep};
 pub use error::{ClixError, Result};
 pub use settings::{Settings, SettingsManager};
 pub use share::{ExportManager, ImportManager};
-pub use storage::Storage;
+pub use storage::{ConversationStorage, Storage};
