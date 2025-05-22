@@ -7,13 +7,13 @@ use std::io;
 use std::process::exit;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use clix::cli::app::{CliArgs, Commands, FlowCommands, SettingsCommands, Shell};
+use clix::cli::app::{CliArgs, Commands, FlowCommands, GitCommands, SettingsCommands, Shell};
 use clix::commands::{
     Command, CommandExecutor, Workflow, WorkflowStep, WorkflowVariable, WorkflowVariableProfile,
 };
 use clix::error::{ClixError, Result};
 use clix::share::{ExportManager, ImportManager};
-use clix::storage::Storage;
+use clix::storage::GitIntegratedStorage;
 use clix::{ClaudeAssistant, SettingsManager};
 
 fn main() {
@@ -35,7 +35,12 @@ fn main() {
 
 fn run() -> Result<()> {
     let args = CliArgs::parse();
-    let storage = Storage::new()?;
+    let mut storage = GitIntegratedStorage::new()?;
+    
+    // Sync with git repositories at startup
+    if let Err(e) = storage.sync_with_repositories() {
+        eprintln!("Warning: Failed to sync with git repositories: {}", e);
+    }
 
     match args.command {
         Commands::Add(add_args) => {
@@ -516,7 +521,7 @@ fn run() -> Result<()> {
         },
 
         Commands::Export(export_args) => {
-            let export_manager = ExportManager::new(storage);
+            let export_manager = ExportManager::new(storage.get_local_storage().clone());
 
             export_manager.export_with_filter(
                 &export_args.output,
@@ -727,7 +732,7 @@ fn run() -> Result<()> {
         }
 
         Commands::Import(import_args) => {
-            let import_manager = ImportManager::new(storage);
+            let import_manager = ImportManager::new(storage.get_local_storage().clone());
 
             let summary =
                 import_manager.import_from_file(&import_args.input, import_args.overwrite)?;
@@ -787,6 +792,121 @@ fn run() -> Result<()> {
 
             println!("# Generating shell completions for {:?}", shell);
             generate(shell, &mut app, "clix", &mut io::stdout());
+        }
+
+        Commands::Git(git_command) => match git_command {
+            GitCommands::AddRepo(add_repo_args) => {
+                let git_manager = storage.get_git_manager();
+                git_manager.add_repository(add_repo_args.name.clone(), add_repo_args.url.clone())?;
+                
+                println!(
+                    "{} Repository '{}' added and cloned successfully",
+                    "Success:".green().bold(),
+                    add_repo_args.name
+                );
+                
+                // Sync after adding new repository
+                storage.sync_with_repositories()?;
+            }
+
+            GitCommands::RemoveRepo(remove_repo_args) => {
+                let git_manager = storage.get_git_manager();
+                git_manager.remove_repository(&remove_repo_args.name)?;
+                
+                println!(
+                    "{} Repository '{}' removed successfully",
+                    "Success:".green().bold(),
+                    remove_repo_args.name
+                );
+            }
+
+            GitCommands::ListRepos => {
+                let git_manager = storage.get_git_manager();
+                let repos = git_manager.list_repositories();
+                
+                if repos.is_empty() {
+                    println!("No git repositories configured yet.");
+                    println!("Use 'clix git add-repo <name> --url <url>' to add one.");
+                    return Ok(());
+                }
+                
+                println!("{}", "Configured Git Repositories:".blue().bold());
+                println!("{}", "=".repeat(50));
+                
+                for repo in repos {
+                    println!("{}: {}", "Name".green().bold(), repo.name);
+                    println!("{}: {}", "URL".green(), repo.url);
+                    println!("{}: {}", "Enabled".green(), if repo.enabled { "✓" } else { "✗" });
+                    
+                    // Check if repository is cloned
+                    if let Some(git_repo) = git_manager.get_repository(&repo.name) {
+                        if git_repo.is_cloned() {
+                            println!("{}: ✓ Cloned", "Status".green());
+                            println!("{}: {}", "Path".green(), git_repo.get_repo_path().display());
+                        } else {
+                            println!("{}: ✗ Not cloned", "Status".yellow());
+                        }
+                    }
+                    
+                    println!("{}", "-".repeat(50));
+                }
+            }
+
+            GitCommands::Pull => {
+                println!("{} Pulling from all repositories...", "Info:".blue().bold());
+                
+                let git_manager = storage.get_git_manager();
+                let results = git_manager.pull_all_repositories()?;
+                
+                println!("\n{}", "Pull Results:".blue().bold());
+                println!("{}", "=".repeat(50));
+                
+                for (repo_name, result) in results {
+                    match result {
+                        Ok(()) => println!("✓ {}: Successfully updated", repo_name),
+                        Err(e) => println!("✗ {}: Failed - {}", repo_name, e),
+                    }
+                }
+                
+                // Load changes after pulling
+                storage.load_from_repositories()?;
+                println!("\n{} Local commands updated with repository changes", "Success:".green().bold());
+            }
+
+            GitCommands::Status => {
+                println!("{} Checking repository status...", "Info:".blue().bold());
+                
+                // Pull first
+                let git_manager = storage.get_git_manager();
+                let pull_results = git_manager.pull_all_repositories()?;
+                
+                println!("\n{}", "Repository Status:".blue().bold());
+                println!("{}", "=".repeat(50));
+                
+                let repos = git_manager.list_repositories();
+                for repo in repos {
+                    println!("{}: {}", "Repository".green().bold(), repo.name);
+                    
+                    if let Some(git_repo) = git_manager.get_repository(&repo.name) {
+                        if git_repo.is_cloned() {
+                            // Check pull result
+                            if let Some((_, pull_result)) = pull_results.iter().find(|(name, _)| name == &repo.name) {
+                                match pull_result {
+                                    Ok(()) => println!("  Status: ✓ Up to date"),
+                                    Err(e) => println!("  Status: ✗ Sync failed - {}", e),
+                                }
+                            }
+                        } else {
+                            println!("  Status: ✗ Not cloned");
+                        }
+                    }
+                    
+                    println!("{}", "-".repeat(50));
+                }
+                
+                // Load changes after status check
+                storage.load_from_repositories()?;
+            }
         }
     }
 

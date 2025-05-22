@@ -14,6 +14,7 @@ A command-line tool for developers to store and execute commands and workflows.
 - Tag commands and workflows for better organization
 - Track command usage statistics
 - Export and import commands to share with your team
+- **Git repository integration** for team command sharing with automatic sync
 - AI-powered assistance for creating and running commands using Claude
 - Simple and intuitive CLI interface
 
@@ -46,6 +47,7 @@ SUBCOMMANDS:
     import     Import commands and workflows from a file
     ask        Ask Claude AI for help with creating and running commands
     settings   Settings management commands (see below for subcommands)
+    git        Git repository management commands (see below for subcommands)
     help       Print this help message or help for a specific command
 ```
 
@@ -64,6 +66,21 @@ SUBCOMMANDS:
     add-profile    Add a profile to a workflow
     list-profiles  List profiles for a workflow
     help           Print help for flow or a specific subcommand
+```
+
+Git repository management commands:
+
+```
+USAGE:
+    clix git [SUBCOMMAND]
+
+SUBCOMMANDS:
+    add-repo      Add a git repository for sharing commands
+    remove-repo   Remove a git repository
+    list-repos    List all configured git repositories
+    pull          Pull latest changes from all repositories
+    status        Sync (pull) and show status of all repositories
+    help          Print help for git or a specific subcommand
 ```
 
 ## Usage
@@ -408,6 +425,109 @@ clix import --input team-commands.json
 # Import and overwrite existing commands
 clix import --input team-commands.json --overwrite
 ```
+
+## Git Repository Integration
+
+Clix supports integration with git repositories for team command sharing. This allows teams to:
+
+- Share commands and workflows via git repositories
+- Automatically sync changes when the tool starts
+- Commit new commands/workflows to separate branches for team review
+- Manage multiple shared repositories
+
+### Setting up a shared repository
+
+First, create a git repository for your team's shared commands. This can be on GitHub, GitLab, or any git hosting service.
+
+#### Adding a git repository
+
+```bash
+# Add a public repository
+clix git add-repo team-commands --url https://github.com/your-team/clix-commands.git
+
+# Add a private repository (requires SSH key setup)
+clix git add-repo private-commands --url git@github.com:your-team/private-commands.git
+```
+
+#### Listing configured repositories
+
+```bash
+clix git list-repos
+```
+
+This will show:
+- Repository name and URL
+- Whether it's enabled
+- Clone status and local path
+
+#### Syncing with repositories
+
+```bash
+# Pull latest changes from all repositories
+clix git pull
+
+# Check status and pull from all repositories
+clix git status
+```
+
+#### Removing a repository
+
+```bash
+clix git remove-repo team-commands
+```
+
+### How it works
+
+1. **Automatic sync at startup**: Every time you run a clix command, it automatically pulls the latest changes from all configured repositories.
+
+2. **Repository structure**: Each repository should have a `commands.json` file in the root containing exported commands and workflows.
+
+3. **Merge behavior**: Repository commands are merged with your local commands. Local commands take precedence if there are naming conflicts.
+
+4. **Automatic commits**: When you add new commands or workflows, clix automatically commits them to all configured repositories using timestamped branch names (e.g., `clix-update-1647890123`).
+
+5. **Team review workflow**: New branches are pushed to the repository for team members to review and merge at a later time.
+
+### Repository structure
+
+Your shared repository should have the following structure:
+
+```
+your-repo/
+├── commands.json          # Exported commands and workflows
+├── README.md             # Documentation for your team
+└── .gitignore           # Git ignore file
+```
+
+The `commands.json` file is automatically managed by clix and contains all shared commands and workflows in the export format.
+
+### Best practices
+
+1. **Repository naming**: Use descriptive names like `devops-commands`, `deployment-workflows`, etc.
+
+2. **Team coordination**: Establish a process for reviewing and merging new command branches.
+
+3. **Documentation**: Keep a README.md in your shared repository explaining the purpose and usage of shared commands.
+
+4. **Access control**: Use private repositories for sensitive commands and ensure proper SSH key or access token configuration.
+
+5. **Multiple repositories**: You can configure multiple repositories for different purposes (e.g., one for general devops commands, another for project-specific workflows).
+
+### Authentication
+
+For private repositories, you'll need to set up authentication:
+
+**SSH (recommended):**
+```bash
+# Generate SSH key if you don't have one
+ssh-keygen -t ed25519 -C "your_email@example.com"
+
+# Add the public key to your git hosting service
+cat ~/.ssh/id_ed25519.pub
+```
+
+**HTTPS with tokens:**
+For HTTPS URLs, you may need to configure git credentials or use personal access tokens depending on your git hosting provider.
 
 ## Development
 

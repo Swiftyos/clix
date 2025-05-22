@@ -37,6 +37,9 @@ pub enum ClixError {
 
     #[error("Rate limit exceeded: {0}")]
     RateLimitError(String),
+
+    #[error("Git error: {0}")]
+    GitError(String),
 }
 
 impl ClixError {
@@ -90,6 +93,9 @@ impl ClixError {
             ClixError::HeaderValueError(e) => {
                 format!("Header format error: {}\n💡 Check your API configuration.", e)
             }
+            ClixError::GitError(msg) => {
+                format!("Git operation failed: {}\n💡 Check repository access and git configuration.", msg)
+            }
         }
     }
 
@@ -120,6 +126,11 @@ impl ClixError {
                 "Check your internet connection".to_string(),
                 "Verify API key is set correctly".to_string(),
                 "Try again in a few moments".to_string(),
+            ],
+            ClixError::GitError(_) => vec![
+                "Check if git is installed and configured".to_string(),
+                "Verify repository URL and access permissions".to_string(),
+                "Ensure SSH keys are set up correctly for private repos".to_string(),
             ],
             _ => vec!["Consult the documentation for more help".to_string()],
         }
