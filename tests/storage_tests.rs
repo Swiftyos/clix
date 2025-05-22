@@ -126,14 +126,14 @@ async fn test_workflow_storage(ctx: &mut StorageContext) {
     // List workflows
     let workflows = ctx.storage.list_workflows().unwrap();
     assert_eq!(workflows.len(), 1);
-    
+
     // Remove workflow
     ctx.storage.remove_workflow(&workflow.name).unwrap();
-    
+
     // List should be empty now
     let workflows = ctx.storage.list_workflows().unwrap();
     assert_eq!(workflows.len(), 0);
-    
+
     // Trying to remove a non-existent workflow should fail
     let remove_result = ctx.storage.remove_workflow(&workflow.name);
     assert!(remove_result.is_err());

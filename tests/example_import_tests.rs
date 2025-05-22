@@ -123,17 +123,15 @@ async fn test_import_all_examples(ctx: &mut ExampleImportContext) {
     let import_manager = ImportManager::new(ctx.storage.clone());
 
     // Import the auth workflow which we know works
-    let examples = vec![
-        "auth-workflow.json",
-    ];
+    let examples = vec!["auth-workflow.json"];
 
     for example in examples {
         let example_path = ctx.examples_dir.join(example);
         let example_path_str = example_path.to_str().unwrap();
-        
+
         // Test import
         let result = import_manager.import_from_file(example_path_str, false);
-        
+
         // Verify import succeeds
         assert!(result.is_ok(), "Failed to import example: {}", example);
     }

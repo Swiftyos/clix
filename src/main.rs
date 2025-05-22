@@ -147,7 +147,7 @@ fn run() -> Result<()> {
                 remove_args.name
             );
         }
-        
+
         // New flow subcommand handling
         Commands::Flow(flow_command) => match flow_command {
             FlowCommands::Add(add_args) => {
