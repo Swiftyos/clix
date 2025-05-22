@@ -2,6 +2,7 @@ mod commands;
 mod storage;
 mod cli;
 mod error;
+mod share;
 
 use clap::Parser;
 use colored::Colorize;
@@ -13,6 +14,7 @@ use commands::{Command, CommandExecutor, Workflow, WorkflowStep};
 use storage::Storage;
 use cli::app::{CliArgs, Commands};
 use error::{ClixError, Result};
+use share::{ExportManager, ImportManager};
 
 fn main() {
     if let Err(e) = run() {
@@ -191,6 +193,48 @@ fn run() -> Result<()> {
             
             // Update usage statistics
             storage.update_workflow_usage(&run_args.name)?;
+        }
+        
+        Commands::Export(export_args) => {
+            let export_manager = ExportManager::new(storage);
+            
+            export_manager.export_with_filter(
+                &export_args.output,
+                export_args.tag,
+                export_args.commands_only,
+                export_args.workflows_only,
+            )?;
+            
+            println!("{} Commands and workflows exported to: {}", 
+                "Success:".green().bold(),
+                export_args.output
+            );
+        }
+        
+        Commands::Import(import_args) => {
+            let import_manager = ImportManager::new(storage);
+            
+            let summary = import_manager.import_from_file(
+                &import_args.input,
+                import_args.overwrite,
+            )?;
+            
+            println!("{} Import completed from: {}", 
+                "Success:".green().bold(),
+                import_args.input
+            );
+            
+            println!("\n{}", "Import Summary:".blue().bold());
+            println!("{}", "=".repeat(50));
+            println!("{}: {}", "Commands Added".green(), summary.commands_added);
+            println!("{}: {}", "Commands Updated".green(), summary.commands_updated);
+            println!("{}: {}", "Commands Skipped".green(), summary.commands_skipped);
+            println!("{}: {}", "Workflows Added".green(), summary.workflows_added);
+            println!("{}: {}", "Workflows Updated".green(), summary.workflows_updated);
+            println!("{}: {}", "Workflows Skipped".green(), summary.workflows_skipped);
+            println!("{}", "-".repeat(50));
+            println!("{}: {}", "Exported By".green(), summary.metadata.exported_by);
+            println!("{}: {}", "Export Description".green(), summary.metadata.description);
         }
     }
 
