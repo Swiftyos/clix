@@ -37,6 +37,9 @@ pub enum ClixError {
 
     #[error("Rate limit exceeded: {0}")]
     RateLimitError(String),
+
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
 }
 
 impl ClixError {
@@ -89,6 +92,9 @@ impl ClixError {
             }
             ClixError::HeaderValueError(e) => {
                 format!("Header format error: {}\n💡 Check your API configuration.", e)
+            }
+            ClixError::InvalidInput(msg) => {
+                format!("Invalid input: {}\n💡 Please check the input format and valid ranges.", msg)
             }
         }
     }

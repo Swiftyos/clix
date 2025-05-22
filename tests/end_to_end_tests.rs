@@ -8,7 +8,6 @@ use clix::commands::{
 use clix::share::{ExportManager, ImportManager};
 use clix::storage::Storage;
 use std::collections::HashMap;
-use std::env;
 use std::fs;
 use std::path::PathBuf;
 use test_context::{AsyncTestContext, test_context};
@@ -33,15 +32,12 @@ impl AsyncTestContext for E2ETestContext {
 
             fs::create_dir_all(&temp_dir).unwrap();
 
-            // Temporarily set HOME environment variable to our test directory
-            // SAFETY: Setting HOME for test isolation is safe in this context
-            unsafe {
-                env::set_var("HOME", &temp_dir);
-            }
+            // Create isolated .clix directory within our test directory
+            let clix_dir = temp_dir.join(".clix");
 
-            // Create the storage instance that will use our test directory
-            let storage = Storage::new().unwrap();
-            let settings_manager = SettingsManager::new().unwrap();
+            // Create the storage and settings instances with custom directory
+            let storage = Storage::new_with_dir(clix_dir.clone()).unwrap();
+            let settings_manager = SettingsManager::new_with_dir(clix_dir).unwrap();
 
             E2ETestContext {
                 temp_dir,
@@ -866,14 +862,14 @@ async fn test_comprehensive_integration(ctx: &mut E2ETestContext) {
     // Test with dev environment
     let dev_vars = HashMap::from([("ENV".to_string(), "dev".to_string())]);
 
-    let results = CommandExecutor::execute_workflow(&workflow, None, Some(dev_vars)).unwrap();
+    let results = CommandExecutor::execute_workflow_with_approval(&workflow, None, Some(dev_vars), false).unwrap();
     assert!(results.len() >= 3); // At least the conditional, branch, and deploy steps
 
     // Test with invalid environment (should fail due to return action)
     let invalid_vars = HashMap::from([("ENV".to_string(), "invalid".to_string())]);
 
     // This should fail or return early due to the conditional with return action
-    let invalid_results = CommandExecutor::execute_workflow(&workflow, None, Some(invalid_vars));
+    let invalid_results = CommandExecutor::execute_workflow_with_approval(&workflow, None, Some(invalid_vars), false);
     // The workflow might still execute but the conditional should handle the invalid case
     assert!(invalid_results.is_ok()); // The workflow executes, but the conditional handles the error
 
