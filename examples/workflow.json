@@ -43,7 +43,9 @@
       "created_at": 1684756000,
       "last_used": null,
       "use_count": 0,
-      "tags": ["example", "basic"]
+      "tags": ["example", "basic"],
+      "variables": [],
+      "profiles": {}
     }
   }
 }

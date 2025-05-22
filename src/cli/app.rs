@@ -45,6 +45,15 @@ pub enum FlowCommands {
 
     /// List all stored workflows
     List(FlowListArgs),
+
+    /// Add a variable to a workflow
+    AddVar(AddWorkflowVarArgs),
+
+    /// Add a profile to a workflow
+    AddProfile(AddWorkflowProfileArgs),
+
+    /// List profiles for a workflow
+    ListProfiles(ListWorkflowProfilesArgs),
 }
 
 #[derive(Args, Debug)]
@@ -121,6 +130,14 @@ pub struct AddWorkflowArgs {
 pub struct RunWorkflowArgs {
     /// Name of the workflow to run
     pub name: String,
+
+    /// Profile to use for variables
+    #[arg(short, long)]
+    pub profile: Option<String>,
+
+    /// Variable values in the format key=value
+    #[arg(short, long)]
+    pub var: Option<Vec<String>>,
 }
 
 #[derive(Args, Debug)]
@@ -157,4 +174,50 @@ pub struct ImportArgs {
     /// Overwrite existing commands with the same name
     #[arg(short, long)]
     pub overwrite: bool,
+}
+
+#[derive(Args, Debug)]
+pub struct AddWorkflowVarArgs {
+    /// Name of the workflow to add the variable to
+    pub workflow_name: String,
+
+    /// Name of the variable
+    #[arg(short, long)]
+    pub name: String,
+
+    /// Description of the variable
+    #[arg(short, long)]
+    pub description: String,
+
+    /// Default value for the variable
+    #[arg(short, long)]
+    pub default: Option<String>,
+
+    /// Whether the variable is required
+    #[arg(short, long)]
+    pub required: bool,
+}
+
+#[derive(Args, Debug)]
+pub struct AddWorkflowProfileArgs {
+    /// Name of the workflow to add the profile to
+    pub workflow_name: String,
+
+    /// Name of the profile
+    #[arg(short, long)]
+    pub name: String,
+
+    /// Description of the profile
+    #[arg(short, long)]
+    pub description: String,
+
+    /// Variable values in the format key=value
+    #[arg(short, long)]
+    pub var: Vec<String>,
+}
+
+#[derive(Args, Debug)]
+pub struct ListWorkflowProfilesArgs {
+    /// Name of the workflow to list profiles for
+    pub workflow_name: String,
 }

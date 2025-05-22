@@ -20,7 +20,7 @@
         },
         {
           "name": "Configure GCP project",
-          "command": "gcloud config set project ${PROJECT_ID}",
+          "command": "gcloud config set project {{ project_id }}",
           "description": "Set the current GCP project to the provided project ID",
           "continue_on_error": false,
           "step_type": "Command"
@@ -64,7 +64,9 @@
       "created_at": 1684756000,
       "last_used": null,
       "use_count": 0,
-      "tags": ["gcp", "resources", "auth-example", "parameter-example"]
+      "tags": ["gcp", "resources", "auth-example", "parameter-example"],
+      "variables": [],
+      "profiles": {}
     }
   }
 }

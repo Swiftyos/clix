@@ -7,6 +7,8 @@ A command-line tool for developers to store and execute commands and workflows.
 - Save frequently used commands with descriptions for easy recall
 - Create and run complex workflows (e.g., troubleshooting production issues)
 - Support for authentication steps in workflows that pause for user interaction
+- Support for variables in workflows with templating using `{{ variable_name }}` syntax
+- Save and reuse variables with profiles for different environments
 - Tag commands and workflows for better organization
 - Track command usage statistics
 - Export and import commands to share with your team
@@ -100,7 +102,14 @@ clix flow add my-workflow --description "My workflow" --steps-file workflow.json
 #### Running a workflow
 
 ```bash
+# Run a workflow
 clix flow run my-workflow
+
+# Run a workflow with specific variable values
+clix flow run my-workflow --var project_name=my-project --var cluster_name=prod-cluster
+
+# Run a workflow using a saved profile
+clix flow run my-workflow --profile prod
 ```
 
 #### Listing workflows
@@ -116,6 +125,54 @@ clix flow list --tag production
 clix flow remove my-workflow
 ```
 
+
+#### Variables in Workflows
+
+Workflows can include variables that are replaced at runtime. Variables are defined using the `{{ variable_name }}` syntax in workflow commands:
+
+```json
+[
+  {
+    "name": "Set GCloud Project",
+    "command": "gcloud config set project {{ project_name }}",
+    "description": "Set the active GCloud project",
+    "continue_on_error": false,
+    "step_type": "Command"
+  },
+  {
+    "name": "Get Cluster Credentials",
+    "command": "gcloud container clusters get-credentials {{ cluster_name }} --zone={{ zone }}",
+    "description": "Fetch credentials for the specified GKE cluster",
+    "continue_on_error": false,
+    "step_type": "Command"
+  }
+]
+```
+
+When running the workflow, you'll be prompted to enter values for each variable. You can also define default values and descriptions for variables:
+
+```bash
+# Add a variable to a workflow
+clix flow add-var my-workflow --name project_name --description "GCloud project ID" --default "my-default-project"
+```
+
+#### Variable Profiles
+
+You can save sets of variable values as profiles for different environments:
+
+```bash
+# Create a production profile
+clix flow add-profile my-workflow --name prod --description "Production environment" --var project_name=prod-project --var cluster_name=prod-cluster --var zone=us-central1-a --var namespace=production
+
+# Create a development profile
+clix flow add-profile my-workflow --name dev --description "Development environment" --var project_name=dev-project --var cluster_name=dev-cluster --var zone=us-central1-a --var namespace=development
+
+# List all profiles for a workflow
+clix flow list-profiles my-workflow
+
+# Run a workflow with a specific profile
+clix flow run my-workflow --profile prod
+```
 
 #### Authentication Steps in Workflows
 

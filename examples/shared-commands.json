@@ -34,25 +34,30 @@
           "name": "Check Pod Status",
           "command": "kubectl get pods -n production",
           "description": "Check the status of all pods in production namespace",
-          "continue_on_error": true
+          "continue_on_error": true,
+          "step_type": "Command"
         },
         {
           "name": "Get Recent Logs",
           "command": "kubectl logs -n production deployment/app --tail=50",
           "description": "Get the most recent 50 log entries from the app",
-          "continue_on_error": true
+          "continue_on_error": true,
+          "step_type": "Command"
         },
         {
           "name": "Check Node Status",
           "command": "kubectl describe nodes",
           "description": "Get detailed information about cluster nodes",
-          "continue_on_error": true
+          "continue_on_error": true,
+          "step_type": "Command"
         }
       ],
       "created_at": 1684756000,
       "last_used": 1684756200,
       "use_count": 3,
-      "tags": ["troubleshooting", "production", "team-shared"]
+      "tags": ["troubleshooting", "production", "team-shared"],
+      "variables": [],
+      "profiles": {}
     }
   }
 }

@@ -1,11 +1,14 @@
 use clap::Parser;
 use colored::Colorize;
+use std::collections::HashMap;
 use std::fs;
 use std::process::exit;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use clix::cli::app::{CliArgs, Commands, FlowCommands};
-use clix::commands::{Command, CommandExecutor, Workflow, WorkflowStep};
+use clix::commands::{
+    Command, CommandExecutor, Workflow, WorkflowStep, WorkflowVariable, WorkflowVariableProfile,
+};
 use clix::error::{ClixError, Result};
 use clix::share::{ExportManager, ImportManager};
 use clix::storage::Storage;
@@ -167,7 +170,30 @@ fn run() -> Result<()> {
 
             FlowCommands::Run(run_args) => {
                 let workflow = storage.get_workflow(&run_args.name)?;
-                let results = CommandExecutor::execute_workflow(&workflow)?;
+
+                // Parse variable values if provided
+                let vars = if let Some(var_args) = &run_args.var {
+                    let mut vars_map = HashMap::new();
+                    for var_str in var_args {
+                        if let Some((key, value)) = var_str.split_once('=') {
+                            vars_map.insert(key.to_string(), value.to_string());
+                        } else {
+                            return Err(ClixError::InvalidCommandFormat(format!(
+                                "Invalid variable format: {}, expected key=value",
+                                var_str
+                            )));
+                        }
+                    }
+                    Some(vars_map)
+                } else {
+                    None
+                };
+
+                let results = CommandExecutor::execute_workflow(
+                    &workflow,
+                    run_args.profile.as_deref(),
+                    vars,
+                )?;
 
                 // Print all results
                 println!("\n{}", "Workflow Results:".blue().bold());
@@ -195,6 +221,85 @@ fn run() -> Result<()> {
                     "Success:".green().bold(),
                     remove_args.name
                 );
+            }
+
+            FlowCommands::AddVar(add_var_args) => {
+                let mut workflow = storage.get_workflow(&add_var_args.workflow_name)?;
+
+                let variable = WorkflowVariable::new(
+                    add_var_args.name,
+                    add_var_args.description,
+                    add_var_args.default,
+                    add_var_args.required,
+                );
+
+                workflow.add_variable(variable);
+                storage.update_workflow(&workflow)?;
+
+                println!(
+                    "{} Variable added to workflow '{}'",
+                    "Success:".green().bold(),
+                    add_var_args.workflow_name
+                );
+            }
+
+            FlowCommands::AddProfile(add_profile_args) => {
+                let mut workflow = storage.get_workflow(&add_profile_args.workflow_name)?;
+
+                // Parse variable values
+                let mut vars_map = HashMap::new();
+                for var_str in &add_profile_args.var {
+                    if let Some((key, value)) = var_str.split_once('=') {
+                        vars_map.insert(key.to_string(), value.to_string());
+                    } else {
+                        return Err(ClixError::InvalidCommandFormat(format!(
+                            "Invalid variable format: {}, expected key=value",
+                            var_str
+                        )));
+                    }
+                }
+
+                let profile = WorkflowVariableProfile::new(
+                    add_profile_args.name,
+                    add_profile_args.description,
+                    vars_map,
+                );
+
+                workflow.add_profile(profile);
+                storage.update_workflow(&workflow)?;
+
+                println!(
+                    "{} Profile added to workflow '{}'",
+                    "Success:".green().bold(),
+                    add_profile_args.workflow_name
+                );
+            }
+
+            FlowCommands::ListProfiles(list_profiles_args) => {
+                let workflow = storage.get_workflow(&list_profiles_args.workflow_name)?;
+
+                if workflow.profiles.is_empty() {
+                    println!(
+                        "No profiles defined for workflow '{}'.",
+                        list_profiles_args.workflow_name
+                    );
+                    return Ok(());
+                }
+
+                println!("{}", "Workflow Profiles:".blue().bold());
+                println!("{}", "=".repeat(50));
+
+                for (name, profile) in &workflow.profiles {
+                    println!("{}: {}", "Profile".green().bold(), name);
+                    println!("{}: {}", "Description".green(), profile.description);
+                    println!("{}: {}", "Variables".green(), profile.variables.len());
+
+                    for (var_name, var_value) in &profile.variables {
+                        println!("{}: {} = {}", "  Variable".yellow(), var_name, var_value);
+                    }
+
+                    println!("{}", "-".repeat(50));
+                }
             }
 
             FlowCommands::List(list_args) => {

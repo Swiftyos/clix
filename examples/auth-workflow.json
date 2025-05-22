@@ -36,7 +36,9 @@
       "created_at": 1684756000,
       "last_used": null,
       "use_count": 0,
-      "tags": ["gcp", "deploy", "auth-example"]
+      "tags": ["gcp", "deploy", "auth-example"],
+      "variables": [],
+      "profiles": {}
     }
   }
 }
