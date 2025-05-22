@@ -8,7 +8,7 @@ use std::path::PathBuf;
 pub struct Settings {
     #[serde(default = "default_ai_model")]
     pub ai_model: String,
-    
+
     #[serde(default)]
     pub ai_settings: AiSettings,
 }
@@ -17,7 +17,7 @@ pub struct Settings {
 pub struct AiSettings {
     #[serde(default = "default_temperature")]
     pub temperature: f32,
-    
+
     #[serde(default = "default_max_tokens")]
     pub max_tokens: usize,
 }

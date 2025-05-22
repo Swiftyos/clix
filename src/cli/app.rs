@@ -30,10 +30,10 @@ pub enum Commands {
 
     /// Import commands and workflows from a file
     Import(ImportArgs),
-    
+
     /// Ask Claude AI for help with creating and running commands
     Ask(AskArgs),
-    
+
     /// Settings management commands
     #[command(subcommand)]
     Settings(SettingsCommands),
@@ -193,16 +193,16 @@ pub struct AskArgs {
 pub enum SettingsCommands {
     /// List all settings
     List,
-    
+
     /// Set the AI model to use with Claude
     SetAiModel(SetAiModelArgs),
-    
+
     /// List available AI models from Claude
     ListAiModels,
-    
+
     /// Set the AI temperature (0.0 to 1.0)
     SetAiTemperature(SetAiTemperatureArgs),
-    
+
     /// Set the AI max tokens
     SetAiMaxTokens(SetAiMaxTokensArgs),
 }

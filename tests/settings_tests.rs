@@ -1,8 +1,8 @@
 use clix::settings::SettingsManager;
 use std::env;
 use std::fs;
-use test_context::{AsyncTestContext, test_context};
 use std::path::PathBuf;
+use test_context::{AsyncTestContext, test_context};
 
 struct SettingsContext {
     temp_dir: PathBuf,
@@ -35,7 +35,10 @@ impl AsyncTestContext for SettingsContext {
             // Create the settings manager instance that will use our test directory
             let settings_manager = SettingsManager::new().unwrap();
 
-            SettingsContext { temp_dir, settings_manager }
+            SettingsContext {
+                temp_dir,
+                settings_manager,
+            }
         })
     }
 
@@ -52,7 +55,7 @@ impl AsyncTestContext for SettingsContext {
 async fn test_default_settings(ctx: &mut SettingsContext) {
     // Load the default settings
     let settings = ctx.settings_manager.load().unwrap();
-    
+
     // Check default values
     assert_eq!(settings.ai_model, "claude-3-opus-20240229");
     assert_eq!(settings.ai_settings.temperature, 0.7);
@@ -65,7 +68,7 @@ async fn test_update_ai_model(ctx: &mut SettingsContext) {
     // Update AI model
     let new_model = "claude-3-sonnet-20240229";
     ctx.settings_manager.update_ai_model(new_model).unwrap();
-    
+
     // Verify the update
     let settings = ctx.settings_manager.load().unwrap();
     assert_eq!(settings.ai_model, new_model);
@@ -76,8 +79,10 @@ async fn test_update_ai_model(ctx: &mut SettingsContext) {
 async fn test_update_ai_temperature(ctx: &mut SettingsContext) {
     // Update AI temperature
     let new_temperature = 0.5;
-    ctx.settings_manager.update_ai_temperature(new_temperature).unwrap();
-    
+    ctx.settings_manager
+        .update_ai_temperature(new_temperature)
+        .unwrap();
+
     // Verify the update
     let settings = ctx.settings_manager.load().unwrap();
     assert_eq!(settings.ai_settings.temperature, new_temperature);
@@ -88,8 +93,10 @@ async fn test_update_ai_temperature(ctx: &mut SettingsContext) {
 async fn test_update_ai_max_tokens(ctx: &mut SettingsContext) {
     // Update AI max tokens
     let new_max_tokens = 2000;
-    ctx.settings_manager.update_ai_max_tokens(new_max_tokens).unwrap();
-    
+    ctx.settings_manager
+        .update_ai_max_tokens(new_max_tokens)
+        .unwrap();
+
     // Verify the update
     let settings = ctx.settings_manager.load().unwrap();
     assert_eq!(settings.ai_settings.max_tokens, new_max_tokens);
@@ -102,15 +109,19 @@ async fn test_persistence(ctx: &mut SettingsContext) {
     let new_model = "claude-3-haiku-20240307";
     let new_temperature = 0.3;
     let new_max_tokens = 1000;
-    
+
     ctx.settings_manager.update_ai_model(new_model).unwrap();
-    ctx.settings_manager.update_ai_temperature(new_temperature).unwrap();
-    ctx.settings_manager.update_ai_max_tokens(new_max_tokens).unwrap();
-    
+    ctx.settings_manager
+        .update_ai_temperature(new_temperature)
+        .unwrap();
+    ctx.settings_manager
+        .update_ai_max_tokens(new_max_tokens)
+        .unwrap();
+
     // Create a new settings manager to verify persistence
     let new_settings_manager = SettingsManager::new().unwrap();
     let settings = new_settings_manager.load().unwrap();
-    
+
     // Verify all settings were persisted
     assert_eq!(settings.ai_model, new_model);
     assert_eq!(settings.ai_settings.temperature, new_temperature);

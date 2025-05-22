@@ -1,11 +1,10 @@
 use clix::ai::claude::ClaudeAction;
-use clix::commands::WorkflowStep;
 
 // This is a mock module for testing without using the actual API
 mod mock_claude {
     use crate::ClaudeAction;
     use clix::commands::WorkflowStep;
-    
+
     pub fn mock_response(question: &str) -> (String, ClaudeAction) {
         match question {
             q if q.contains("create command") => {
@@ -64,20 +63,24 @@ mod mock_claude {
 #[test]
 fn test_parse_create_command_action() {
     let (text, expected_action) = mock_claude::mock_response("help me create command for echo");
-    
+
     // In a real implementation, we'd call the parser directly
     // For this test, we'll just validate that our mocked response/action pairs are consistent
     match expected_action {
-        ClaudeAction::CreateCommand { name, description, command } => {
+        ClaudeAction::CreateCommand {
+            name,
+            description,
+            command,
+        } => {
             assert_eq!(name, "test-echo");
             assert_eq!(description, "Echo a test message");
             assert_eq!(command, "echo \"This is a test\"");
-            
+
             // Verify that these values are also in the text response
             assert!(text.contains(&name));
             assert!(text.contains(&description));
             assert!(text.contains(&command));
-        },
+        }
         _ => panic!("Expected CreateCommand action"),
     }
 }
@@ -85,26 +88,30 @@ fn test_parse_create_command_action() {
 #[test]
 fn test_parse_create_workflow_action() {
     let (text, expected_action) = mock_claude::mock_response("help me create workflow");
-    
+
     match expected_action {
-        ClaudeAction::CreateWorkflow { name, description, steps } => {
+        ClaudeAction::CreateWorkflow {
+            name,
+            description,
+            steps,
+        } => {
             assert_eq!(name, "test-workflow");
             assert_eq!(description, "A test workflow");
             assert_eq!(steps.len(), 2);
-            
+
             assert_eq!(steps[0].name, "Echo Step");
             assert_eq!(steps[0].command, "echo Step 1");
-            
+
             assert_eq!(steps[1].name, "Echo Step 2");
             assert_eq!(steps[1].command, "echo Step 2");
             assert!(steps[1].continue_on_error);
-            
+
             // Verify that these values are also in the text response
             assert!(text.contains(&name));
             assert!(text.contains(&description));
             assert!(text.contains("Step 1"));
             assert!(text.contains("Step 2"));
-        },
+        }
         _ => panic!("Expected CreateWorkflow action"),
     }
 }
@@ -112,12 +119,12 @@ fn test_parse_create_workflow_action() {
 #[test]
 fn test_parse_run_command_action() {
     let (text, expected_action) = mock_claude::mock_response("run command to list files");
-    
+
     match expected_action {
         ClaudeAction::RunCommand(name) => {
             assert_eq!(name, "list-files");
             assert!(text.contains(&name));
-        },
+        }
         _ => panic!("Expected RunCommand action"),
     }
 }
@@ -125,12 +132,12 @@ fn test_parse_run_command_action() {
 #[test]
 fn test_parse_run_workflow_action() {
     let (text, expected_action) = mock_claude::mock_response("run workflow to deploy the app");
-    
+
     match expected_action {
         ClaudeAction::RunWorkflow(name) => {
             assert_eq!(name, "deploy-app");
             assert!(text.contains(&name));
-        },
+        }
         _ => panic!("Expected RunWorkflow action"),
     }
 }
@@ -138,11 +145,11 @@ fn test_parse_run_workflow_action() {
 #[test]
 fn test_parse_no_action() {
     let (text, expected_action) = mock_claude::mock_response("just tell me about clix");
-    
+
     match expected_action {
         ClaudeAction::NoAction => {
             assert!(text.contains("[INFO]"));
-        },
+        }
         _ => panic!("Expected NoAction"),
     }
 }
