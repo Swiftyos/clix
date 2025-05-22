@@ -11,7 +11,7 @@ pub struct Settings {
 
     #[serde(default)]
     pub ai_settings: AiSettings,
-    
+
     #[serde(default)]
     pub git_settings: GitSettings,
 }
@@ -29,10 +29,10 @@ pub struct AiSettings {
 pub struct GitSettings {
     #[serde(default = "default_auto_sync")]
     pub auto_sync: bool,
-    
+
     #[serde(default = "default_auto_commit")]
     pub auto_commit: bool,
-    
+
     #[serde(default = "default_commit_message_prefix")]
     pub commit_message_prefix: String,
 }

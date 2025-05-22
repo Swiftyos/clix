@@ -1,5 +1,5 @@
-mod store;
 mod git_storage;
+mod store;
 
-pub use store::Storage;
 pub use git_storage::GitIntegratedStorage;
+pub use store::Storage;
