@@ -8,9 +8,17 @@ use std::io::{self, BufRead, Write};
 use std::os::unix::process::ExitStatusExt;
 use std::process::{Command as ProcessCommand, Output};
 
+/// Core executor for commands and workflows
 pub struct CommandExecutor;
 
 impl CommandExecutor {
+    /// Executes a single command and returns its output
+    ///
+    /// # Arguments
+    /// * `command` - The command to execute
+    ///
+    /// # Returns
+    /// * `Result<Output>` - The command output or an error
     pub fn execute_command(command: &Command) -> Result<Output> {
         println!("{} {}", "Executing:".blue().bold(), command.name);
         println!("{} {}", "Description:".blue().bold(), command.description);
@@ -35,6 +43,15 @@ impl CommandExecutor {
         }
     }
 
+    /// Executes a workflow with all its steps
+    ///
+    /// # Arguments
+    /// * `workflow` - The workflow to execute
+    /// * `profile_name` - Optional profile name to use for variables
+    /// * `provided_vars` - Optional variables provided directly at runtime
+    ///
+    /// # Returns
+    /// * `Result<Vec<(String, Result<Output>)>>` - Results for each step in the workflow
     pub fn execute_workflow(
         workflow: &Workflow,
         profile_name: Option<&str>,
@@ -135,7 +152,15 @@ impl CommandExecutor {
         Ok(results)
     }
 
-    /// Execute a conditional step (if/then/else)
+    /// Executes a conditional step (if/then/else)
+    ///
+    /// # Arguments
+    /// * `step` - The workflow step to execute
+    /// * `variables` - Current variables from the workflow context
+    /// * `last_output` - Output from the previous step
+    ///
+    /// # Returns
+    /// * `Result<Output>` - The execution result
     fn execute_conditional_step(
         step: &WorkflowStep,
         variables: &HashMap<String, String>,
@@ -387,7 +412,15 @@ impl CommandExecutor {
         }
     }
 
-    /// Execute a branch step (case/switch)
+    /// Executes a branch step (similar to switch/case statements)
+    ///
+    /// # Arguments
+    /// * `step` - The workflow step to execute
+    /// * `context` - Current workflow execution context (variables)
+    /// * `results` - Results collection to store step results
+    ///
+    /// # Returns
+    /// * `Result<Output>` - The execution result
     fn execute_branch_step(
         step: &WorkflowStep,
         context: &mut WorkflowContext,
@@ -498,7 +531,15 @@ impl CommandExecutor {
         }
     }
 
-    /// Execute a loop step (while)
+    /// Executes a loop step that repeats a sequence of steps
+    ///
+    /// # Arguments
+    /// * `step` - The workflow step to execute
+    /// * `context` - Current workflow execution context (variables)
+    /// * `results` - Results collection to store step results
+    ///
+    /// # Returns
+    /// * `Result<Output>` - The execution result
     fn execute_loop_step(
         step: &WorkflowStep,
         context: &mut WorkflowContext,
@@ -617,6 +658,13 @@ impl CommandExecutor {
         }
     }
 
+    /// Executes a regular command step
+    ///
+    /// # Arguments
+    /// * `step` - The workflow step to execute
+    ///
+    /// # Returns
+    /// * `Result<Output>` - The command output or an error
     fn execute_command_step(step: &WorkflowStep) -> Result<Output> {
         let output = if cfg!(target_os = "windows") {
             ProcessCommand::new("cmd")
@@ -637,6 +685,13 @@ impl CommandExecutor {
         }
     }
 
+    /// Executes an authentication step, which requires user interaction
+    ///
+    /// # Arguments
+    /// * `step` - The workflow step to execute
+    ///
+    /// # Returns
+    /// * `Result<Output>` - The command output or an error
     fn execute_auth_step(step: &WorkflowStep) -> Result<Output> {
         // First, execute the command which typically starts an auth flow
         let output = if cfg!(target_os = "windows") {
@@ -700,7 +755,13 @@ impl CommandExecutor {
         }
     }
 
-    /// Request approval from the user before executing a step
+    /// Requests explicit approval from the user before executing a step
+    ///
+    /// # Arguments
+    /// * `step` - The workflow step that requires approval
+    ///
+    /// # Returns
+    /// * `Result<()>` - Ok if approved, Error if rejected
     fn request_approval(step: &WorkflowStep) -> Result<()> {
         println!(
             "{}",
@@ -739,6 +800,10 @@ impl CommandExecutor {
         }
     }
 
+    /// Prints the output of a command execution to the console
+    ///
+    /// # Arguments
+    /// * `output` - The command output to print
     pub fn print_command_output(output: &Output) {
         if !output.stdout.is_empty() {
             println!("\n{}", "STDOUT:".green().bold());

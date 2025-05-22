@@ -369,6 +369,136 @@ clix flow run my-workflow --profile prod --var cluster_name=prod-cluster-2
 
 Profiles make it easy to switch between environments without having to remember and type all the variable values each time.
 
+## Conditional Logic in Workflows
+
+Clix supports powerful conditional logic in your workflows, allowing you to build dynamic, intelligent automation. You can use conditionals, branching, and loops to create workflows that respond to different conditions and inputs.
+
+### Conditional Steps (If/Then/Else)
+
+Conditional steps allow you to execute certain commands only when specific conditions are met, similar to if/then/else statements in programming languages:
+
+```json
+{
+  "name": "Check File",
+  "description": "Verify config file exists",
+  "step_type": "Conditional",
+  "command": "[ -f config.yaml ]",
+  "conditional": {
+    "then_steps": [
+      {
+        "name": "Read Config",
+        "command": "cat config.yaml",
+        "description": "Display the config file",
+        "continue_on_error": false,
+        "step_type": "Command"
+      }
+    ],
+    "else_steps": [
+      {
+        "name": "Create Config",
+        "command": "echo 'default: true' > config.yaml",
+        "description": "Create a default config file",
+        "continue_on_error": false,
+        "step_type": "Command"
+      }
+    ]
+  }
+}
+```
+
+#### Expression Support
+
+Conditional steps support a wide range of expressions:
+
+- **Exit code checks**: `$? -eq 0` (check if previous command succeeded)
+- **File tests**: `[ -f file.txt ]`, `[ -d directory ]` (check if file or directory exists)
+- **String comparisons**: `[ "$var" = "value" ]`, `[ -z "$var" ]` (check if variable is empty)
+- **Logical operators**: `&&` (AND), `||` (OR), `!` (NOT)
+
+### Branch Steps (Switch/Case)
+
+Branch steps allow you to select different execution paths based on variable values, similar to switch/case statements:
+
+```json
+{
+  "name": "Set Environment",
+  "description": "Configure the appropriate environment",
+  "step_type": "Branch",
+  "command": "",
+  "branch": {
+    "variable": "env",
+    "cases": {
+      "dev": [
+        {
+          "name": "Set Dev Config",
+          "command": "export CONFIG_PATH=./config/dev.yaml",
+          "description": "Set development configuration",
+          "continue_on_error": false,
+          "step_type": "Command"
+        }
+      ],
+      "prod": [
+        {
+          "name": "Set Prod Config",
+          "command": "export CONFIG_PATH=./config/prod.yaml",
+          "description": "Set production configuration",
+          "continue_on_error": false,
+          "step_type": "Command"
+        }
+      ]
+    },
+    "default_case": [
+      {
+        "name": "Set Default Config",
+        "command": "export CONFIG_PATH=./config/default.yaml",
+        "description": "Set default configuration",
+        "continue_on_error": false,
+        "step_type": "Command"
+      }
+    ]
+  }
+}
+```
+
+### Loop Steps
+
+Loop steps allow you to repeat a set of commands multiple times or until a condition is met:
+
+```json
+{
+  "name": "Process Files",
+  "description": "Process all log files",
+  "step_type": "Loop",
+  "command": "",
+  "loop_data": {
+    "variable": "file",
+    "values": "$(ls *.log)",
+    "steps": [
+      {
+        "name": "Process File",
+        "command": "cat {{ file }} | grep ERROR >> errors.txt",
+        "description": "Extract errors from log file",
+        "continue_on_error": true,
+        "step_type": "Command"
+      }
+    ]
+  }
+}
+```
+
+### Converting Shell Functions to Workflows
+
+If you have shell functions in your `.bashrc`, `.zshrc`, or other shell scripts, you can automatically convert them to Clix workflows:
+
+```bash
+# Convert a shell function to a workflow
+clix flow convert-function --file ~/.zshrc --function deploy --name deploy --description "Deploy application to production"
+```
+
+This analyzes your shell function and creates a workflow with equivalent functionality, automatically detecting conditionals, loops, and command sequences.
+
+For more detailed information about conditional workflows, see the [Conditional Workflows Documentation](docs/conditional_workflows.md).
+
 ### Authentication Steps in Workflows
 
 Workflows can include authentication steps that require user interaction. For example, when running `gcloud auth login`, the user needs to follow a browser-based authentication flow. The workflow will pause after executing the auth command and wait for the user to press Enter before continuing:
@@ -388,6 +518,190 @@ Press Enter when you have completed the authentication process...
 ```
 
 After the user completes the authentication process and presses Enter, the workflow will continue with the next step.
+
+### Approval Requirements for Sensitive Steps
+
+When executing workflows that contain potentially destructive or sensitive commands, you can require explicit user approval before proceeding. This ensures that users understand and confirm the actions they're about to take.
+
+#### Adding Approval Requirements
+
+To mark a step as requiring approval, add the `require_approval` field to the step definition:
+
+```json
+{
+  "name": "Delete Resources",
+  "command": "kubectl delete namespace test-env",
+  "description": "Delete the test environment namespace",
+  "continue_on_error": false,
+  "step_type": "Command",
+  "require_approval": true
+}
+```
+
+#### How Approval Works
+
+When Clix encounters a step that requires approval:
+
+1. It displays detailed information about the step, including name, description, and command
+2. It prompts the user with a yes/no confirmation:
+
+```
+⚠️  This step requires approval before execution:
+Name: Delete Resources
+Description: Delete the test environment namespace
+Command: kubectl delete namespace test-env
+Do you want to proceed? [y/N]:
+```
+
+3. The user must type `y` or `yes` to proceed. Any other input will cancel the step execution.
+4. If the step is rejected, the workflow stops with an error message: "Step execution canceled by user"
+
+#### When to Use Approval
+
+Consider requiring approval for steps that:
+
+- **Delete data**: Commands that remove files, databases, or resources
+- **Modify production environments**: Changes to production systems
+- **Deploy applications**: Releasing new versions to production
+- **Create expensive resources**: Creating cloud resources that may incur costs
+- **Modify security settings**: Changes to security groups, firewall rules, etc.
+
+#### Example: Production Deployment with Approval
+
+```json
+[
+  {
+    "name": "Run Tests",
+    "command": "npm test",
+    "description": "Run all tests before deployment",
+    "continue_on_error": false,
+    "step_type": "Command"
+  },
+  {
+    "name": "Build Application",
+    "command": "npm run build",
+    "description": "Build the production version",
+    "continue_on_error": false,
+    "step_type": "Command"
+  },
+  {
+    "name": "Deploy to Production",
+    "command": "aws s3 sync ./build s3://production-website",
+    "description": "Deploy to production servers",
+    "continue_on_error": false,
+    "step_type": "Command",
+    "require_approval": true
+  }
+]
+```
+
+For more detailed information about approval workflows, see the [Approval Workflows Documentation](docs/approval_workflows.md).
+
+## Converting Shell Functions to Workflows
+
+Clix provides a powerful feature to automatically convert your existing shell functions to workflows. This allows you to:
+
+1. Maintain your familiar shell functions while gaining workflow management features
+2. Share your useful functions with team members in a structured format
+3. Add variables, approvals, and other Clix features to your existing scripts
+4. Organize and document your shell functions better
+
+### Basic Function Conversion
+
+To convert a shell function to a Clix workflow:
+
+```bash
+# Basic function conversion
+clix flow convert-function --file ~/.zshrc --function deploy --name deploy-workflow --description "Deploy application to production"
+```
+
+This will:
+1. Parse the specified shell script file
+2. Find the function with the given name
+3. Analyze its structure and commands
+4. Create a new Clix workflow with equivalent functionality
+
+### Automatic Feature Detection
+
+The function converter automatically detects and converts:
+
+- **If/then/else statements**: Converted to conditional steps
+- **Case statements**: Converted to branch steps
+- **For/while loops**: Converted to loop steps
+- **Function parameters**: Converted to workflow variables
+- **Command sequences**: Converted to sequential steps
+
+### Example: Convert a Deployment Function
+
+Consider this shell function:
+
+```bash
+deploy() {
+  local env="$1"
+  
+  if [ -z "$env" ]; then
+    echo "Usage: deploy [dev|prod]"
+    return 1
+  fi
+  
+  # Run tests
+  npm test
+  if [ $? -ne 0 ]; then
+    echo "Tests failed, aborting deployment"
+    return 1
+  fi
+  
+  # Build
+  npm run build
+  
+  case "$env" in
+    dev)
+      echo "Deploying to development..."
+      aws s3 sync ./build s3://dev-website
+      ;;
+    prod)
+      echo "Deploying to production..."
+      aws s3 sync ./build s3://prod-website
+      ;;
+    *)
+      echo "Unknown environment: $env"
+      return 1
+      ;;
+  esac
+  
+  echo "Deployment completed successfully"
+}
+```
+
+Convert it to a workflow:
+
+```bash
+clix flow convert-function --file ./functions.sh --function deploy --name deployment --description "Deploy application to development or production" --tags deploy,aws
+```
+
+This creates a workflow with:
+- A variable for the `env` parameter
+- A conditional step for the input validation
+- Sequential steps for the tests and build
+- A branch step for the environment selection
+- Proper error handling at each stage
+
+### Advanced Options
+
+The function converter supports additional options:
+
+```bash
+# Add tags to the generated workflow
+clix flow convert-function --file ~/.zshrc --function deploy --name deploy --tags deploy,production
+
+# Add approval requirements for sensitive operations
+clix flow convert-function --file ~/.zshrc --function deploy --name deploy --approve-dangerous
+
+# Specify default variable values
+clix flow convert-function --file ~/.zshrc --function deploy --name deploy --var-defaults env=dev
+```
+
+For complex functions with many conditional paths, the converter intelligently maps each code path to the appropriate workflow step types.
 
 ### Exporting commands and workflows
 
