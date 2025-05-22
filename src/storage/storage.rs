@@ -4,6 +4,7 @@ use dirs::home_dir;
 use std::fs;
 use std::path::PathBuf;
 
+#[derive(Clone)]
 pub struct Storage {
     store_path: PathBuf,
 }

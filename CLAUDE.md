@@ -37,14 +37,29 @@ cargo install --path .
 ### Testing
 
 ```bash
-# Run all tests
-cargo test
+# Install cargo-nextest if not already installed
+cargo install cargo-nextest
+
+# Run all tests using nextest
+cargo nextest run
 
 # Run specific test
-cargo test test_name
+cargo nextest run test_name
 
-# Run tests with output
-cargo test -- --nocapture
+# Run tests with higher verbosity
+cargo nextest run -v
+
+# Run tests in a specific file
+cargo nextest run --package clix --lib commands::tests
+
+# Run tests matching a pattern
+cargo nextest run 'command_*'
+
+# Run tests with a specific profile
+cargo nextest run -P ci
+
+# Legacy test command (fallback)
+cargo test
 ```
 
 ### Development Tools
@@ -63,9 +78,20 @@ cargo clippy
 cargo update
 ```
 
+## CI/CD
+
+This project uses GitHub Actions for continuous integration. The workflow includes:
+
+- Running tests with nextest
+- Linting with clippy
+- Checking formatting with rustfmt
+- Building on multiple platforms (Linux, macOS, Windows)
+
+The CI configuration is in `.github/workflows/ci.yml`.
+
 ## Architecture
 
-The project will likely consist of these main components:
+The project consists of these main components:
 
 - **Command Storage**: Persistence layer for storing commands and workflows
 - **Command Parser**: Processing user input and mapping to stored commands
@@ -75,11 +101,15 @@ The project will likely consist of these main components:
 
 Current project structure:
 - `Cargo.toml`: Project configuration and dependencies
-- `src/main.rs`: Entry point for the application
-
-Suggested module organization:
-- `src/commands/`: Command parsing and execution
+- `src/lib.rs`: Core functionality as a library for testability
+- `src/main.rs`: CLI entry point for the application
+- `src/commands/`: Command models and execution
 - `src/storage/`: Persistence of commands and workflows
-- `src/workflows/`: Complex workflow definitions and execution
+- `src/share/`: Import/export functionality for sharing commands
+- `src/cli/`: Command-line interface and argument parsing
+- `src/error.rs`: Error types and handling
+- `tests/`: Integration tests
+- `.github/workflows/`: CI/CD configuration
+
+Future additions:
 - `src/ai/`: AI integration for enhancing commands
-- `src/cli/`: Command-line interface components

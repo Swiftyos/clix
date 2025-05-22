@@ -1,20 +1,14 @@
-mod commands;
-mod storage;
-mod cli;
-mod error;
-mod share;
-
 use clap::Parser;
 use colored::Colorize;
 use std::fs;
 use std::process::exit;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use commands::{Command, CommandExecutor, Workflow, WorkflowStep};
-use storage::Storage;
-use cli::app::{CliArgs, Commands};
-use error::{ClixError, Result};
-use share::{ExportManager, ImportManager};
+use clix::commands::{Command, CommandExecutor, Workflow, WorkflowStep};
+use clix::storage::Storage;
+use clix::cli::app::{CliArgs, Commands};
+use clix::error::{ClixError, Result};
+use clix::share::{ExportManager, ImportManager};
 
 fn main() {
     if let Err(e) = run() {

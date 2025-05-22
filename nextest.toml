@@ -1,0 +1,12 @@
+[profile.default]
+# Show the 10 slowest tests
+slow-timeout = { period = "60s", terminate-after = 3 }
+final-status-level = "pass"
+status = { slow = "cyan", failure = "red" }
+
+[profile.ci]
+# CI-specific settings
+retries = 2
+fail-fast = true
+slow-timeout = { period = "30s", terminate-after = 2 }
+junit = { path = "junit.xml" }
