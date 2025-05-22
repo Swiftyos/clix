@@ -89,6 +89,40 @@ This project uses GitHub Actions for continuous integration. The workflow includ
 
 The CI configuration is in `.github/workflows/ci.yml`.
 
+## Development Workflow
+
+Before submitting code, please ensure:
+
+1. **Tests pass**:
+   ```bash
+   cargo nextest run
+   ```
+
+2. **No clippy warnings**:
+   ```bash
+   cargo clippy -- -D warnings
+   ```
+
+3. **Code is properly formatted**:
+   ```bash
+   cargo fmt -- --check
+   ```
+
+If you need to fix formatting issues:
+   ```bash
+   cargo fmt
+   ```
+
+4. **Documentation is updated** if needed
+
+When making changes, follow this sequence:
+1. Write tests first
+2. Implement the feature/fix
+3. Run tests to verify
+4. Run clippy and fix any warnings
+5. Run formatter
+6. Commit and push
+
 ## Architecture
 
 The project consists of these main components:
