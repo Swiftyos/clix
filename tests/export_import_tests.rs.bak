@@ -12,7 +12,7 @@ struct ExportImportContext {
 }
 
 impl AsyncTestContext for ExportImportContext {
-    async fn setup() -> Self {
+    async fn setup<'a>() -> Self {
         // Create a temporary directory for tests
         let temp_dir = std::env::temp_dir().join("clix_test").join(format!(
             "test_{}",
@@ -25,7 +25,7 @@ impl AsyncTestContext for ExportImportContext {
         fs::create_dir_all(&temp_dir).unwrap();
 
         // Temporarily set HOME environment variable to our test directory
-        env::set_var("HOME", &temp_dir);
+        unsafe { env::set_var("HOME", &temp_dir); }
 
         // Create the storage instance that will use our test directory
         let storage = Storage::new().unwrap();
@@ -33,7 +33,7 @@ impl AsyncTestContext for ExportImportContext {
         ExportImportContext { temp_dir, storage }
     }
 
-    async fn teardown(self) {
+    async fn teardown<'a>(self) {
         // Clean up the temporary directory
         fs::remove_dir_all(&self.temp_dir).unwrap_or_default();
     }
@@ -90,7 +90,7 @@ async fn test_export_import(ctx: &mut ExportImportContext) {
     assert!(export_path.exists());
 
     // Create a second storage instance
-    env::set_var("HOME", ctx.temp_dir.join("second_storage"));
+    unsafe { env::set_var("HOME", ctx.temp_dir.join("second_storage")); }
     fs::create_dir_all(ctx.temp_dir.join("second_storage")).unwrap();
     let second_storage = Storage::new().unwrap();
 
@@ -131,7 +131,7 @@ async fn test_export_import(ctx: &mut ExportImportContext) {
         .unwrap();
 
     // Create a third storage instance
-    env::set_var("HOME", ctx.temp_dir.join("third_storage"));
+    unsafe { env::set_var("HOME", ctx.temp_dir.join("third_storage")); }
     fs::create_dir_all(ctx.temp_dir.join("third_storage")).unwrap();
     let third_storage = Storage::new().unwrap();
 

@@ -11,7 +11,7 @@ struct StorageContext {
 }
 
 impl AsyncTestContext for StorageContext {
-    async fn setup() -> Self {
+    async fn setup<'a>() -> Self {
         // Create a temporary directory for tests
         let temp_dir = std::env::temp_dir().join("clix_test").join(format!(
             "test_{}",
@@ -24,7 +24,7 @@ impl AsyncTestContext for StorageContext {
         fs::create_dir_all(&temp_dir).unwrap();
 
         // Temporarily set HOME environment variable to our test directory
-        env::set_var("HOME", &temp_dir);
+        unsafe { env::set_var("HOME", &temp_dir); }
 
         // Create the storage instance that will use our test directory
         let storage = Storage::new().unwrap();
@@ -32,7 +32,7 @@ impl AsyncTestContext for StorageContext {
         StorageContext { temp_dir, storage }
     }
 
-    async fn teardown(self) {
+    async fn teardown<'a>(self) {
         // Clean up the temporary directory
         fs::remove_dir_all(&self.temp_dir).unwrap_or_default();
     }
