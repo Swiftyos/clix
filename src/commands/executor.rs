@@ -6,7 +6,10 @@ use crate::security::{CommandSanitizer, SecurityConfig, SecurityValidator};
 use colored::Colorize;
 use std::collections::HashMap;
 use std::io::{self, BufRead, Write};
+#[cfg(unix)]
 use std::os::unix::process::ExitStatusExt;
+#[cfg(windows)]
+use std::os::windows::process::ExitStatusExt;
 use std::process::{Command as ProcessCommand, Output};
 
 pub struct CommandExecutor;
