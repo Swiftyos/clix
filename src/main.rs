@@ -1,11 +1,13 @@
-use clap::Parser;
+use clap::{CommandFactory, Parser};
+use clap_complete::{Shell as CompletionShell, generate};
 use colored::Colorize;
 use std::collections::HashMap;
 use std::fs;
+use std::io;
 use std::process::exit;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use clix::cli::app::{CliArgs, Commands, FlowCommands, SettingsCommands};
+use clix::cli::app::{CliArgs, Commands, FlowCommands, SettingsCommands, Shell};
 use clix::commands::{
     Command, CommandExecutor, Workflow, WorkflowStep, WorkflowVariable, WorkflowVariableProfile,
 };
@@ -16,7 +18,17 @@ use clix::{ClaudeAssistant, SettingsManager};
 
 fn main() {
     if let Err(e) = run() {
-        eprintln!("{} {}", "Error:".red().bold(), e);
+        eprintln!("{}", e.to_user_friendly_message());
+
+        // Show suggestions if available
+        let suggestions = e.get_suggestions();
+        if !suggestions.is_empty() {
+            eprintln!("\n{}", "Suggestions:".yellow().bold());
+            for suggestion in suggestions {
+                eprintln!("  • {}", suggestion);
+            }
+        }
+
         exit(1);
     }
 }
@@ -356,11 +368,111 @@ fn run() -> Result<()> {
             }
 
             // Handle the new conditional and branch commands
-            FlowCommands::AddCondition(_) => {
-                println!("Add condition feature is not yet implemented in the CLI");
+            FlowCommands::AddCondition(args) => {
+                use clix::commands::models::{Condition, ConditionalAction, WorkflowStep};
+
+                // Read steps from JSON files
+                let then_steps_json = fs::read_to_string(&args.then_file).map_err(ClixError::Io)?;
+                let then_steps: Vec<WorkflowStep> =
+                    serde_json::from_str(&then_steps_json).map_err(ClixError::Serialization)?;
+
+                let else_steps = if let Some(else_file) = &args.else_file {
+                    let else_steps_json = fs::read_to_string(else_file).map_err(ClixError::Io)?;
+                    let steps: Vec<WorkflowStep> =
+                        serde_json::from_str(&else_steps_json).map_err(ClixError::Serialization)?;
+                    Some(steps)
+                } else {
+                    None
+                };
+
+                // Parse action if provided
+                let action = if let Some(action_str) = &args.action {
+                    match action_str.as_str() {
+                        "run_then" => Some(ConditionalAction::RunThen),
+                        "run_else" => Some(ConditionalAction::RunElse),
+                        "continue" => Some(ConditionalAction::Continue),
+                        "break" => Some(ConditionalAction::Break),
+                        "return" => {
+                            let return_code = args.return_code.unwrap_or(0);
+                            Some(ConditionalAction::Return(return_code))
+                        }
+                        _ => {
+                            return Err(ClixError::InvalidCommandFormat(format!(
+                                "Invalid action '{}'. Valid actions: run_then, run_else, continue, break, return",
+                                action_str
+                            )));
+                        }
+                    }
+                } else {
+                    None
+                };
+
+                // Create condition
+                let condition = Condition {
+                    expression: args.condition.clone(),
+                    variable: args.variable.clone(),
+                };
+
+                // Create conditional step
+                let conditional_step = WorkflowStep::new_conditional(
+                    args.name.clone(),
+                    args.description.clone(),
+                    condition,
+                    then_steps,
+                    else_steps,
+                    action,
+                );
+
+                // Get workflow and add the conditional step
+                let mut workflow = storage.get_workflow(&args.workflow_name)?;
+                workflow.steps.push(conditional_step);
+                storage.update_workflow(&workflow)?;
+
+                println!(
+                    "{} Conditional step '{}' added to workflow '{}'",
+                    "Success:".green().bold(),
+                    args.name,
+                    args.workflow_name
+                );
             }
-            FlowCommands::AddBranch(_) => {
-                println!("Add branch feature is not yet implemented in the CLI");
+            FlowCommands::AddBranch(args) => {
+                use clix::commands::models::{BranchCase, WorkflowStep};
+
+                // Read cases from JSON file
+                let cases_json = fs::read_to_string(&args.cases_file).map_err(ClixError::Io)?;
+                let cases: Vec<BranchCase> =
+                    serde_json::from_str(&cases_json).map_err(ClixError::Serialization)?;
+
+                // Read default case if provided
+                let default_case = if let Some(default_file) = &args.default_file {
+                    let default_json = fs::read_to_string(default_file).map_err(ClixError::Io)?;
+                    let steps: Vec<WorkflowStep> =
+                        serde_json::from_str(&default_json).map_err(ClixError::Serialization)?;
+                    Some(steps)
+                } else {
+                    None
+                };
+
+                // Create branch step
+                let branch_step = WorkflowStep::new_branch(
+                    args.name.clone(),
+                    args.description.clone(),
+                    args.variable.clone(),
+                    cases,
+                    default_case,
+                );
+
+                // Get workflow and add the branch step
+                let mut workflow = storage.get_workflow(&args.workflow_name)?;
+                workflow.steps.push(branch_step);
+                storage.update_workflow(&workflow)?;
+
+                println!(
+                    "{} Branch step '{}' added to workflow '{}'",
+                    "Success:".green().bold(),
+                    args.name,
+                    args.workflow_name
+                );
             }
             FlowCommands::ConvertFunction(args) => {
                 use clix::commands::FunctionConverter;
@@ -661,6 +773,20 @@ fn run() -> Result<()> {
                 "Export Description".green(),
                 summary.metadata.description
             );
+        }
+
+        Commands::Completions(completions_args) => {
+            let mut app = CliArgs::command();
+            let shell = match completions_args.shell {
+                Shell::Bash => CompletionShell::Bash,
+                Shell::Zsh => CompletionShell::Zsh,
+                Shell::Fish => CompletionShell::Fish,
+                Shell::PowerShell => CompletionShell::PowerShell,
+                Shell::Elvish => CompletionShell::Elvish,
+            };
+
+            println!("# Generating shell completions for {:?}", shell);
+            generate(shell, &mut app, "clix", &mut io::stdout());
         }
     }
 

@@ -371,7 +371,7 @@ impl Workflow {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CommandStore {
     pub commands: HashMap<String, Command>,
     pub workflows: HashMap<String, Workflow>,

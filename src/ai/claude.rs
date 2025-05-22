@@ -8,9 +8,132 @@ use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue};
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::io::{self, Write};
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::{Duration, Instant};
 
 const CLAUDE_API_URL: &str = "https://api.anthropic.com/v1/messages";
 const CLAUDE_MODELS_URL: &str = "https://api.anthropic.com/v1/models";
+
+// Rate limiting configuration
+const DEFAULT_REQUESTS_PER_MINUTE: u32 = 50;
+const DEFAULT_TOKENS_PER_MINUTE: u32 = 40000;
+const DEFAULT_MAX_RETRIES: u32 = 3;
+const BASE_RETRY_DELAY_MS: u64 = 1000;
+
+pub struct RateLimiter {
+    requests_per_minute: u32,
+    tokens_per_minute: u32,
+    request_times: Arc<Mutex<Vec<Instant>>>,
+    token_usage: Arc<Mutex<Vec<(Instant, u32)>>>,
+}
+
+impl RateLimiter {
+    pub fn new(requests_per_minute: u32, tokens_per_minute: u32) -> Self {
+        Self {
+            requests_per_minute,
+            tokens_per_minute,
+            request_times: Arc::new(Mutex::new(Vec::new())),
+            token_usage: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    pub fn with_defaults() -> Self {
+        Self::new(DEFAULT_REQUESTS_PER_MINUTE, DEFAULT_TOKENS_PER_MINUTE)
+    }
+
+    pub fn check_and_wait(&self, estimated_tokens: u32) -> Result<()> {
+        let now = Instant::now();
+        let one_minute_ago = now - Duration::from_secs(60);
+
+        // Check request rate limit
+        {
+            let mut request_times = self.request_times.lock().unwrap();
+            request_times.retain(|&time| time > one_minute_ago);
+
+            if request_times.len() >= self.requests_per_minute as usize {
+                let wait_time = request_times[0] + Duration::from_secs(60) - now;
+                if wait_time > Duration::from_secs(0) {
+                    println!(
+                        "{} Rate limit reached. Waiting {} seconds...",
+                        "Clix:".yellow().bold(),
+                        wait_time.as_secs()
+                    );
+                    thread::sleep(wait_time);
+                }
+            }
+
+            request_times.push(now);
+        }
+
+        // Check token rate limit
+        {
+            let mut token_usage = self.token_usage.lock().unwrap();
+            token_usage.retain(|(time, _)| *time > one_minute_ago);
+
+            let current_tokens: u32 = token_usage.iter().map(|(_, tokens)| tokens).sum();
+
+            if current_tokens + estimated_tokens > self.tokens_per_minute {
+                if let Some((oldest_time, _)) = token_usage.first() {
+                    let wait_time = *oldest_time + Duration::from_secs(60) - now;
+                    if wait_time > Duration::from_secs(0) {
+                        println!(
+                            "{} Token rate limit reached. Waiting {} seconds...",
+                            "Clix:".yellow().bold(),
+                            wait_time.as_secs()
+                        );
+                        thread::sleep(wait_time);
+                    }
+                }
+            }
+
+            token_usage.push((now, estimated_tokens));
+        }
+
+        Ok(())
+    }
+}
+
+pub struct RetryConfig {
+    pub max_retries: u32,
+    pub base_delay_ms: u64,
+    pub exponential_backoff: bool,
+    pub retry_on_rate_limit: bool,
+    pub retry_on_network_error: bool,
+    pub retry_on_server_error: bool,
+}
+
+impl Default for RetryConfig {
+    fn default() -> Self {
+        Self {
+            max_retries: DEFAULT_MAX_RETRIES,
+            base_delay_ms: BASE_RETRY_DELAY_MS,
+            exponential_backoff: true,
+            retry_on_rate_limit: true,
+            retry_on_network_error: true,
+            retry_on_server_error: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum RetryableError {
+    RateLimit,
+    NetworkError,
+    ServerError(u16),
+    Timeout,
+}
+
+impl RetryableError {
+    pub fn should_retry(&self, config: &RetryConfig) -> bool {
+        match self {
+            RetryableError::RateLimit => config.retry_on_rate_limit,
+            RetryableError::NetworkError => config.retry_on_network_error,
+            RetryableError::ServerError(status) => config.retry_on_server_error && *status >= 500,
+            RetryableError::Timeout => config.retry_on_network_error,
+        }
+    }
+}
 
 // Claude request models
 #[derive(Debug, Serialize)]
@@ -98,6 +221,8 @@ pub struct ClaudeAssistant {
     client: Client,
     api_key: String,
     settings: Settings,
+    rate_limiter: RateLimiter,
+    retry_config: RetryConfig,
 }
 
 impl ClaudeAssistant {
@@ -118,6 +243,8 @@ impl ClaudeAssistant {
             client,
             api_key,
             settings,
+            rate_limiter: RateLimiter::with_defaults(),
+            retry_config: RetryConfig::default(),
         })
     }
 
@@ -127,10 +254,78 @@ impl ClaudeAssistant {
         command_history: Vec<&Command>,
         workflow_history: Vec<&Workflow>,
     ) -> Result<(String, ClaudeAction)> {
+        self.ask_with_retry(
+            question,
+            command_history,
+            workflow_history,
+            &self.retry_config,
+        )
+    }
+
+    pub fn ask_with_retry(
+        &self,
+        question: &str,
+        command_history: Vec<&Command>,
+        workflow_history: Vec<&Workflow>,
+        retry_config: &RetryConfig,
+    ) -> Result<(String, ClaudeAction)> {
+        let mut last_error: Option<RetryableError> = None;
+
+        for attempt in 0..=retry_config.max_retries {
+            if attempt > 0 {
+                if let Some(ref error) = last_error {
+                    if !error.should_retry(retry_config) {
+                        break;
+                    }
+
+                    let delay = if retry_config.exponential_backoff {
+                        retry_config.base_delay_ms * (2_u64.pow(attempt - 1))
+                    } else {
+                        retry_config.base_delay_ms
+                    };
+
+                    println!(
+                        "{} Retrying in {} seconds... (attempt {}/{})",
+                        "Clix:".yellow().bold(),
+                        delay / 1000,
+                        attempt,
+                        retry_config.max_retries
+                    );
+
+                    thread::sleep(Duration::from_millis(delay));
+                }
+            }
+
+            match self.ask_internal(question, &command_history, &workflow_history) {
+                Ok(result) => return Ok(result),
+                Err(e) => {
+                    last_error = Some(self.categorize_error(&e));
+                    if attempt == retry_config.max_retries {
+                        return Err(e);
+                    }
+                }
+            }
+        }
+
+        Err(ClixError::ApiError("Max retries exceeded".to_string()))
+    }
+
+    fn ask_internal(
+        &self,
+        question: &str,
+        command_history: &[&Command],
+        workflow_history: &[&Workflow],
+    ) -> Result<(String, ClaudeAction)> {
         println!("{} Asking Claude...", "Clix:".blue().bold());
 
+        // Estimate tokens (rough estimation)
+        let estimated_tokens = (question.len() / 4) as u32 + 1000; // Rough token estimation
+
+        // Apply rate limiting
+        self.rate_limiter.check_and_wait(estimated_tokens)?;
+
         // Create system prompt
-        let system_prompt = self.create_system_prompt(&command_history, &workflow_history);
+        let system_prompt = self.create_system_prompt(command_history, workflow_history);
 
         // Create user message
         let user_message = Message {
@@ -207,6 +402,52 @@ impl ClaudeAssistant {
         let action = self.parse_action(&text)?;
 
         Ok((text, action))
+    }
+
+    fn categorize_error(&self, error: &ClixError) -> RetryableError {
+        match error {
+            ClixError::ApiError(msg) => {
+                if msg.contains("rate_limit") || msg.contains("429") {
+                    RetryableError::RateLimit
+                } else if msg.contains("500")
+                    || msg.contains("502")
+                    || msg.contains("503")
+                    || msg.contains("504")
+                {
+                    // Extract status code if possible
+                    if let Some(status) = self.extract_status_code(msg) {
+                        RetryableError::ServerError(status)
+                    } else {
+                        RetryableError::ServerError(500)
+                    }
+                } else {
+                    RetryableError::NetworkError
+                }
+            }
+            ClixError::NetworkError(_) => RetryableError::NetworkError,
+            ClixError::CommandExecutionFailed(msg) => {
+                if msg.contains("timeout") || msg.contains("connection") {
+                    RetryableError::NetworkError
+                } else if msg.contains("rate") || msg.contains("429") {
+                    RetryableError::RateLimit
+                } else {
+                    RetryableError::NetworkError
+                }
+            }
+            _ => RetryableError::NetworkError,
+        }
+    }
+
+    fn extract_status_code(&self, message: &str) -> Option<u16> {
+        // Try to extract HTTP status code from error message
+        for word in message.split_whitespace() {
+            if let Ok(code) = word.parse::<u16>() {
+                if (400..600).contains(&code) {
+                    return Some(code);
+                }
+            }
+        }
+        None
     }
 
     fn create_system_prompt(

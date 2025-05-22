@@ -1,12 +1,22 @@
 use crate::commands::models::{Command, CommandStore, Workflow};
 use crate::error::{ClixError, Result};
 use dirs::home_dir;
+use std::cell::RefCell;
 use std::fs;
 use std::path::PathBuf;
+use std::time::SystemTime;
 
 #[derive(Clone)]
 pub struct Storage {
     store_path: PathBuf,
+    cache: RefCell<Option<CachedStore>>,
+}
+
+#[derive(Clone)]
+struct CachedStore {
+    store: CommandStore,
+    last_modified: SystemTime,
+    dirty: bool,
 }
 
 impl Storage {
@@ -24,10 +34,51 @@ impl Storage {
 
         let store_path = store_dir.join("commands.json");
 
-        Ok(Storage { store_path })
+        Ok(Storage {
+            store_path,
+            cache: RefCell::new(None),
+        })
     }
 
+    /// Load store with caching for improved performance
     pub fn load(&self) -> Result<CommandStore> {
+        self.load_with_cache()
+    }
+
+    /// Load store from cache if valid, otherwise from disk
+    fn load_with_cache(&self) -> Result<CommandStore> {
+        // Check if file exists
+        if !self.store_path.exists() {
+            return Ok(CommandStore::new());
+        }
+
+        // Get file modification time
+        let file_modified = fs::metadata(&self.store_path)?.modified()?;
+
+        // Check cache validity
+        let mut cache = self.cache.borrow_mut();
+        if let Some(ref cached) = *cache {
+            if cached.last_modified >= file_modified && !cached.dirty {
+                return Ok(cached.store.clone());
+            }
+        }
+
+        // Load from disk and update cache
+        let content = fs::read_to_string(&self.store_path)?;
+        let store: CommandStore = serde_json::from_str(&content)?;
+
+        *cache = Some(CachedStore {
+            store: store.clone(),
+            last_modified: file_modified,
+            dirty: false,
+        });
+
+        Ok(store)
+    }
+
+    /// Load store without caching (for when we need fresh data)
+    #[allow(dead_code)]
+    fn load_direct(&self) -> Result<CommandStore> {
         if !self.store_path.exists() {
             return Ok(CommandStore::new());
         }
@@ -40,7 +91,32 @@ impl Storage {
     pub fn save(&self, store: &CommandStore) -> Result<()> {
         let content = serde_json::to_string_pretty(store)?;
         fs::write(&self.store_path, content)?;
+
+        // Update cache with new data
+        let file_modified = fs::metadata(&self.store_path)?.modified()?;
+        let mut cache = self.cache.borrow_mut();
+        *cache = Some(CachedStore {
+            store: store.clone(),
+            last_modified: file_modified,
+            dirty: false,
+        });
+
         Ok(())
+    }
+
+    /// Mark cache as dirty without saving (for bulk operations)
+    #[allow(dead_code)]
+    fn mark_cache_dirty(&self) {
+        let mut cache = self.cache.borrow_mut();
+        if let Some(ref mut cached) = *cache {
+            cached.dirty = true;
+        }
+    }
+
+    /// Save and update cache atomically
+    #[allow(dead_code)]
+    fn save_and_update_cache(&self, store: &CommandStore) -> Result<()> {
+        self.save(store)
     }
 
     pub fn add_command(&self, command: Command) -> Result<()> {
@@ -50,7 +126,7 @@ impl Storage {
     }
 
     pub fn get_command(&self, name: &str) -> Result<Command> {
-        let store = self.load()?;
+        let store = self.load_with_cache()?;
         store
             .commands
             .get(name)
@@ -58,8 +134,21 @@ impl Storage {
             .ok_or_else(|| ClixError::CommandNotFound(name.to_string()))
     }
 
+    /// Get command reference without cloning (more efficient for read-only operations)
+    pub fn get_command_ref<F, R>(&self, name: &str, f: F) -> Result<R>
+    where
+        F: FnOnce(&Command) -> R,
+    {
+        let store = self.load_with_cache()?;
+        store
+            .commands
+            .get(name)
+            .map(f)
+            .ok_or_else(|| ClixError::CommandNotFound(name.to_string()))
+    }
+
     pub fn list_commands(&self) -> Result<Vec<Command>> {
-        let store = self.load()?;
+        let store = self.load_with_cache()?;
         Ok(store.commands.values().cloned().collect())
     }
 
@@ -90,7 +179,7 @@ impl Storage {
     }
 
     pub fn get_workflow(&self, name: &str) -> Result<Workflow> {
-        let store = self.load()?;
+        let store = self.load_with_cache()?;
         store
             .workflows
             .get(name)
@@ -98,8 +187,21 @@ impl Storage {
             .ok_or_else(|| ClixError::CommandNotFound(name.to_string()))
     }
 
+    /// Get workflow reference without cloning (more efficient for read-only operations)
+    pub fn get_workflow_ref<F, R>(&self, name: &str, f: F) -> Result<R>
+    where
+        F: FnOnce(&Workflow) -> R,
+    {
+        let store = self.load_with_cache()?;
+        store
+            .workflows
+            .get(name)
+            .map(f)
+            .ok_or_else(|| ClixError::CommandNotFound(name.to_string()))
+    }
+
     pub fn list_workflows(&self) -> Result<Vec<Workflow>> {
-        let store = self.load()?;
+        let store = self.load_with_cache()?;
         Ok(store.workflows.values().cloned().collect())
     }
 
