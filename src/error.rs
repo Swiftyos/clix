@@ -94,7 +94,7 @@ impl ClixError {
                 format!("Header format error: {}\n💡 Check your API configuration.", e)
             }
             ClixError::NotFound(msg) => {
-                format!("Not found: {}\n💡 Check if the resource exists or verify the identifier.", msg)
+                format!("Not found: {}\n💡 Check if the item exists or create it first.", msg)
             }
         }
     }

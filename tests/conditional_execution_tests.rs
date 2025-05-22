@@ -75,6 +75,7 @@ async fn test_time_workflow_execution(ctx: &mut ConditionalExecutionContext) {
 
     // Verify workflow was imported
     let workflows = ctx.storage.list_workflows().unwrap();
+    assert_eq!(workflows.len(), 1);
     assert!(workflows.iter().any(|w| w.name == "time-check"));
 
     // Get the workflow
@@ -133,6 +134,7 @@ async fn test_gke_workflow_execution(ctx: &mut ConditionalExecutionContext) {
 
     // Verify workflow was imported
     let workflows = ctx.storage.list_workflows().unwrap();
+    assert!(workflows.len() >= 1);
     assert!(workflows.iter().any(|w| w.name == "gke"));
 
     // Get the workflow

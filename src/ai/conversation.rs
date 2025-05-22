@@ -62,6 +62,12 @@ pub struct WorkflowCreationState {
     pub pending_refinements: Vec<String>,
 }
 
+impl Default for ConversationSession {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ConversationSession {
     pub fn new() -> Self {
         let now = SystemTime::now()
@@ -147,12 +153,6 @@ impl ConversationSession {
             .into_iter()
             .rev()
             .collect()
-    }
-}
-
-impl Default for ConversationSession {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
