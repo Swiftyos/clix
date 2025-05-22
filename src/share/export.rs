@@ -1,10 +1,9 @@
-use crate::commands::models::{Command, Workflow, CommandStore};
+use crate::commands::models::{Command, CommandStore, Workflow};
 use crate::error::{ClixError, Result};
 use crate::storage::Storage;
-use std::fs;
-use std::path::Path;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fs;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExportData {
@@ -36,14 +35,20 @@ impl ExportManager {
     }
 
     pub fn export_with_filter(
-        &self, 
+        &self,
         output_path: &str,
         tag_filter: Option<String>,
         commands_only: bool,
         workflows_only: bool,
     ) -> Result<()> {
         let store = self.storage.load()?;
-        self.write_export_file(output_path, store, tag_filter, commands_only, workflows_only)
+        self.write_export_file(
+            output_path,
+            store,
+            tag_filter,
+            commands_only,
+            workflows_only,
+        )
     }
 
     fn write_export_file(
@@ -57,14 +62,11 @@ impl ExportManager {
         // Filter commands if needed
         let commands = if !workflows_only {
             let mut filtered_commands = store.commands;
-            
+
             if let Some(tag) = &tag_filter {
-                filtered_commands = filtered_commands
-                    .into_iter()
-                    .filter(|(_, cmd)| cmd.tags.contains(tag))
-                    .collect();
+                filtered_commands.retain(|_, cmd| cmd.tags.contains(tag));
             }
-            
+
             Some(filtered_commands)
         } else {
             None
@@ -73,14 +75,11 @@ impl ExportManager {
         // Filter workflows if needed
         let workflows = if !commands_only {
             let mut filtered_workflows = store.workflows;
-            
+
             if let Some(tag) = &tag_filter {
-                filtered_workflows = filtered_workflows
-                    .into_iter()
-                    .filter(|(_, wf)| wf.tags.contains(tag))
-                    .collect();
+                filtered_workflows.retain(|_, wf| wf.tags.contains(tag));
             }
-            
+
             Some(filtered_workflows)
         } else {
             None
@@ -93,15 +92,29 @@ impl ExportManager {
             .as_secs();
 
         let username = std::env::var("USER").unwrap_or_else(|_| "unknown".to_string());
-        
+
         let metadata = ExportMetadata {
             exported_at: now,
             exported_by: username,
             description: format!(
                 "Exported {} {}{}",
-                if tag_filter.is_some() { "with tag filter" } else { "all" },
-                if commands_only { "commands" } else if workflows_only { "workflows" } else { "commands and workflows" },
-                if let Some(tag) = &tag_filter { format!(": {}", tag) } else { "".to_string() }
+                if tag_filter.is_some() {
+                    "with tag filter"
+                } else {
+                    "all"
+                },
+                if commands_only {
+                    "commands"
+                } else if workflows_only {
+                    "workflows"
+                } else {
+                    "commands and workflows"
+                },
+                if let Some(tag) = &tag_filter {
+                    format!(": {}", tag)
+                } else {
+                    "".to_string()
+                }
             ),
         };
 
@@ -114,11 +127,9 @@ impl ExportManager {
         };
 
         // Serialize to JSON and write to file
-        let json = serde_json::to_string_pretty(&export_data)
-            .map_err(|e| ClixError::Serialization(e))?;
+        let json = serde_json::to_string_pretty(&export_data).map_err(ClixError::Serialization)?;
 
-        fs::write(output_path, json)
-            .map_err(|e| ClixError::Io(e))?;
+        fs::write(output_path, json).map_err(ClixError::Io)?;
 
         Ok(())
     }

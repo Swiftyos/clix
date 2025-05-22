@@ -1,0 +1,6 @@
+[build]
+
+[lints.clippy]
+# Silence specific clippy lints
+manual_retain = "allow"
+module_inception = "allow"

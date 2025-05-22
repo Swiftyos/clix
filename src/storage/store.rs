@@ -4,6 +4,7 @@ use dirs::home_dir;
 use std::fs;
 use std::path::PathBuf;
 
+#[derive(Clone)]
 pub struct Storage {
     store_path: PathBuf,
 }
@@ -11,10 +12,12 @@ pub struct Storage {
 impl Storage {
     pub fn new() -> Result<Self> {
         let store_dir = home_dir()
-            .ok_or_else(|| ClixError::Io(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "Could not determine home directory",
-            )))?
+            .ok_or_else(|| {
+                ClixError::Io(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "Could not determine home directory",
+                ))
+            })?
             .join(".clix");
 
         fs::create_dir_all(&store_dir)?;
@@ -70,7 +73,7 @@ impl Storage {
 
     pub fn update_command_usage(&self, name: &str) -> Result<()> {
         let mut store = self.load()?;
-        
+
         if let Some(cmd) = store.commands.get_mut(name) {
             cmd.mark_used();
             self.save(&store)?;
@@ -110,7 +113,7 @@ impl Storage {
 
     pub fn update_workflow_usage(&self, name: &str) -> Result<()> {
         let mut store = self.load()?;
-        
+
         if let Some(wf) = store.workflows.get_mut(name) {
             wf.mark_used();
             self.save(&store)?;

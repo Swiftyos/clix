@@ -1,3 +1,3 @@
-pub mod storage;
+mod store;
 
-pub use storage::Storage;
+pub use store::Storage;

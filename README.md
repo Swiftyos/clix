@@ -105,6 +105,50 @@ clix import --input team-commands.json
 clix import --input team-commands.json --overwrite
 ```
 
+## Development
+
+### Requirements
+
+- Rust (latest stable version)
+- cargo-nextest (`cargo install cargo-nextest`)
+
+### Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/clix.git
+cd clix
+
+# Build the project
+cargo build
+
+# Run tests
+cargo nextest run
+```
+
+### Contribution Guidelines
+
+Before submitting a pull request, please ensure:
+
+1. **Tests pass**:
+   ```bash
+   cargo nextest run
+   ```
+
+2. **No clippy warnings**:
+   ```bash
+   cargo clippy -- -D warnings
+   ```
+
+3. **Code is properly formatted**:
+   ```bash
+   cargo fmt -- --check
+   # Fix formatting issues if any
+   cargo fmt
+   ```
+
+4. **Documentation is updated** if needed
+
 ## License
 
 MIT
