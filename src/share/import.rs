@@ -1,7 +1,7 @@
-use crate::commands::models::{Command, Workflow, CommandStore};
+use crate::commands::models::{Command, CommandStore, Workflow};
 use crate::error::{ClixError, Result};
-use crate::storage::Storage;
 use crate::share::export::ExportData;
+use crate::storage::Storage;
 use std::fs;
 
 pub struct ImportManager {
@@ -15,12 +15,11 @@ impl ImportManager {
 
     pub fn import_from_file(&self, input_path: &str, overwrite: bool) -> Result<ImportSummary> {
         // Read the file
-        let file_content = fs::read_to_string(input_path)
-            .map_err(|e| ClixError::Io(e))?;
+        let file_content = fs::read_to_string(input_path).map_err(|e| ClixError::Io(e))?;
 
         // Parse the JSON
-        let export_data: ExportData = serde_json::from_str(&file_content)
-            .map_err(|e| ClixError::Serialization(e))?;
+        let export_data: ExportData =
+            serde_json::from_str(&file_content).map_err(|e| ClixError::Serialization(e))?;
 
         // Load the current store
         let mut store = self.storage.load()?;

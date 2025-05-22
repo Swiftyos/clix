@@ -19,7 +19,7 @@ impl Command {
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
+
         Command {
             name,
             description,
@@ -30,13 +30,13 @@ impl Command {
             tags,
         }
     }
-    
+
     pub fn mark_used(&mut self) {
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
+
         self.last_used = Some(now);
         self.use_count += 1;
     }
@@ -72,7 +72,7 @@ impl Workflow {
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
+
         Workflow {
             name,
             description,
@@ -83,13 +83,13 @@ impl Workflow {
             tags,
         }
     }
-    
+
     pub fn mark_used(&mut self) {
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        
+
         self.last_used = Some(now);
         self.use_count += 1;
     }
