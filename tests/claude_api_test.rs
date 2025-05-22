@@ -34,6 +34,7 @@ fn test_claude_api_connection() {
             temperature: 0.7,
             max_tokens: 200, // Small for testing
         },
+        git_settings: Default::default(),
     };
 
     // Initialize the assistant

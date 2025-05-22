@@ -9,12 +9,15 @@ Clix is a command-line tool for developers to store and execute commands and wor
 - Create and run complex workflows (e.g., troubleshooting production issues)
 - Leverage AI to enhance command management and execution
 - List saved commands with explanations using `clix list`
+- Share commands and workflows with teams via git repositories
+- Automatically sync shared commands across team members
 
 Use cases include:
 - Retrieving logs from cloud services
 - Restarting services during incidents
 - Running complex development or deployment sequences
 - Managing common commands similar to shell aliases but with better organization
+- Sharing team knowledge through version-controlled command repositories
 
 ## Commands
 
