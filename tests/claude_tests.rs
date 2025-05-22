@@ -1,14 +1,10 @@
 use clix::ai::claude::ClaudeAction;
-use clix::commands::{Command, Workflow, WorkflowStep};
-use serde_json::json;
-use test_context::{AsyncTestContext, test_context};
+use clix::commands::WorkflowStep;
 
 // This is a mock module for testing without using the actual API
 mod mock_claude {
     use crate::ClaudeAction;
-    use clix::commands::{Command, Workflow, WorkflowStep};
-    use reqwest::blocking::Response;
-    use serde_json::json;
+    use clix::commands::WorkflowStep;
     
     pub fn mock_response(question: &str) -> (String, ClaudeAction) {
         match question {

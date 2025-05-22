@@ -1,5 +1,6 @@
 use crate::commands::{Command, Workflow, WorkflowStep};
 use crate::error::{ClixError, Result};
+use crate::settings::Settings;
 use colored::Colorize;
 use dotenv::dotenv;
 use reqwest::blocking::Client;
@@ -9,6 +10,7 @@ use std::env;
 use std::io::{self, Write};
 
 const CLAUDE_API_URL: &str = "https://api.anthropic.com/v1/messages";
+const CLAUDE_MODELS_URL: &str = "https://api.anthropic.com/v1/models";
 
 // Claude request models
 #[derive(Debug, Serialize)]
@@ -38,6 +40,19 @@ struct ClaudeResponse {
     content: Vec<ContentBlock>,
 }
 
+// Models list response
+#[derive(Debug, Deserialize)]
+struct ModelsResponse {
+    models: Vec<ModelInfo>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ModelInfo {
+    name: String,
+    description: String,
+    max_tokens: u32,
+}
+
 #[derive(Debug, Deserialize)]
 struct ContentBlock {
     text: String,
@@ -56,10 +71,11 @@ pub enum ClaudeAction {
 pub struct ClaudeAssistant {
     client: Client,
     api_key: String,
+    settings: Settings,
 }
 
 impl ClaudeAssistant {
-    pub fn new() -> Result<Self> {
+    pub fn new(settings: Settings) -> Result<Self> {
         // Load .env file if it exists
         dotenv().ok();
         
@@ -72,7 +88,7 @@ impl ClaudeAssistant {
         
         let client = Client::new();
         
-        Ok(ClaudeAssistant { client, api_key })
+        Ok(ClaudeAssistant { client, api_key, settings })
     }
     
     pub fn ask(&self, question: &str, command_history: Vec<&Command>, workflow_history: Vec<&Workflow>) -> Result<(String, ClaudeAction)> {
@@ -89,9 +105,9 @@ impl ClaudeAssistant {
         
         // Create request
         let request = ClaudeRequest {
-            model: "claude-3-opus-20240229".to_string(),
-            max_tokens: 4000,
-            temperature: 0.7,
+            model: self.settings.ai_model.clone(),
+            max_tokens: self.settings.ai_settings.max_tokens,
+            temperature: self.settings.ai_settings.temperature,
             messages: vec![user_message],
             system: system_prompt,
         };
@@ -263,8 +279,8 @@ Follow these guidelines:
         if let Some(_) = regex::Regex::new(r"\[CREATE WORKFLOW\]").unwrap().find(text) {
             let name_re = regex::Regex::new(r"Name: ([^\n]+)").unwrap();
             let desc_re = regex::Regex::new(r"Description: ([^\n]+)").unwrap();
-            let step_re = regex::Regex::new(r"- Step \d+: name=\"([^\"]+)\", command=\"([^\"]+)\", description=\"([^\"]+)\", continue_on_error=(\w+), step_type=\"([^\"]+)\"").unwrap();
             
+            // Parse manually for steps using line-by-line approach instead of complex regex
             if let (Some(name_match), Some(desc_match)) = (
                 name_re.captures(text),
                 desc_re.captures(text),
@@ -272,22 +288,42 @@ Follow these guidelines:
                 let name = name_match.get(1).unwrap().as_str().trim().to_string();
                 let description = desc_match.get(1).unwrap().as_str().trim().to_string();
                 
-                // Parse steps
+                // Parse steps using line-by-line approach
                 let mut steps = Vec::new();
-                for step_match in step_re.captures_iter(text) {
-                    let step_name = step_match.get(1).unwrap().as_str().to_string();
-                    let command = step_match.get(2).unwrap().as_str().to_string();
-                    let step_desc = step_match.get(3).unwrap().as_str().to_string();
-                    let continue_on_error = step_match.get(4).unwrap().as_str() == "true";
-                    let step_type = step_match.get(5).unwrap().as_str();
-                    
-                    let step = if step_type == "Auth" {
-                        WorkflowStep::new_auth(step_name, command, step_desc)
-                    } else {
-                        WorkflowStep::new_command(step_name, command, step_desc, continue_on_error)
-                    };
-                    
-                    steps.push(step);
+                
+                // Find the Steps: section and parse each step
+                if let Some(steps_section) = text.split("Steps:").nth(1) {
+                    for line in steps_section.lines() {
+                        let line = line.trim();
+                        if line.starts_with("- ") && line.contains("name=") && line.contains("command=") {
+                            // Extract step info with string operations instead of regex
+                            if let (Some(name_part), Some(rest)) = (line.split("name=").nth(1), line.split("command=").nth(1)) {
+                                let step_name = name_part.split('"').nth(1).unwrap_or("").to_string();
+                                let command = rest.split('"').nth(1).unwrap_or("").to_string();
+                                
+                                // Extract description
+                                let step_desc = if let Some(desc_part) = rest.split("description=").nth(1) {
+                                    desc_part.split('"').nth(1).unwrap_or("").to_string()
+                                } else {
+                                    "Step generated by Claude".to_string()
+                                };
+                                
+                                // Extract continue_on_error
+                                let continue_on_error = rest.contains("continue_on_error=true");
+                                
+                                // Extract step type
+                                let is_auth_step = rest.contains("step_type=\"Auth\"");
+                                
+                                let step = if is_auth_step {
+                                    WorkflowStep::new_auth(step_name, command, step_desc)
+                                } else {
+                                    WorkflowStep::new_command(step_name, command, step_desc, continue_on_error)
+                                };
+                                
+                                steps.push(step);
+                            }
+                        }
+                    }
                 }
                 
                 if !steps.is_empty() {
@@ -302,6 +338,33 @@ Follow these guidelines:
         
         // No action found
         Ok(ClaudeAction::NoAction)
+    }
+    
+    pub fn list_models(&self) -> Result<Vec<String>> {
+        // Create headers
+        let mut headers = HeaderMap::new();
+        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+        headers.insert("x-api-key", HeaderValue::from_str(&self.api_key)?);
+        headers.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
+        
+        // Make request
+        let response = self.client
+            .get(CLAUDE_MODELS_URL)
+            .headers(headers)
+            .send()
+            .map_err(|e| ClixError::CommandExecutionFailed(format!("Failed to call Claude API: {}", e)))?;
+        
+        // Parse response
+        let models_response: ModelsResponse = response.json()
+            .map_err(|e| ClixError::CommandExecutionFailed(format!("Failed to parse Claude API response: {}", e)))?;
+        
+        // Extract model names
+        let model_names = models_response.models
+            .into_iter()
+            .map(|model| model.name)
+            .collect();
+        
+        Ok(model_names)
     }
     
     pub fn confirm_action(&self, action: &ClaudeAction) -> Result<bool> {

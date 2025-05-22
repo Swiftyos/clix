@@ -43,6 +43,7 @@ SUBCOMMANDS:
     export     Export commands and workflows to a file
     import     Import commands and workflows from a file
     ask        Ask Claude AI for help with creating and running commands
+    settings   Settings management commands (see below for subcommands)
     help       Print this help message or help for a specific command
 ```
 
@@ -116,6 +117,27 @@ clix ask "Create a workflow for deploying to AWS with authentication"
 
 # Ask for help finding and running existing commands
 clix ask "What command do I have for listing Docker containers?"
+```
+
+#### Configuring Claude AI Settings
+
+You can configure various settings for the Claude AI integration:
+
+```bash
+# List current settings
+clix settings list
+
+# List available AI models
+clix settings list-ai-models
+
+# Set AI model to use
+clix settings set-ai-model claude-3-haiku-20240307
+
+# Set AI temperature (0.0 to 1.0, lower is more deterministic)
+clix settings set-ai-temperature 0.5
+
+# Set AI max tokens (output length limit)
+clix settings set-ai-max-tokens 2000
 ```
 
 The Claude assistant will analyze your question and:

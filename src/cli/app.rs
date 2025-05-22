@@ -33,6 +33,10 @@ pub enum Commands {
     
     /// Ask Claude AI for help with creating and running commands
     Ask(AskArgs),
+    
+    /// Settings management commands
+    #[command(subcommand)]
+    Settings(SettingsCommands),
 }
 
 #[derive(Subcommand, Debug)]
@@ -183,6 +187,42 @@ pub struct ImportArgs {
 pub struct AskArgs {
     /// The question or request for Claude
     pub question: String,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum SettingsCommands {
+    /// List all settings
+    List,
+    
+    /// Set the AI model to use with Claude
+    SetAiModel(SetAiModelArgs),
+    
+    /// List available AI models from Claude
+    ListAiModels,
+    
+    /// Set the AI temperature (0.0 to 1.0)
+    SetAiTemperature(SetAiTemperatureArgs),
+    
+    /// Set the AI max tokens
+    SetAiMaxTokens(SetAiMaxTokensArgs),
+}
+
+#[derive(Args, Debug)]
+pub struct SetAiModelArgs {
+    /// The model name (e.g., claude-3-opus-20240229)
+    pub model: String,
+}
+
+#[derive(Args, Debug)]
+pub struct SetAiTemperatureArgs {
+    /// The temperature value (0.0 to 1.0)
+    pub temperature: f32,
+}
+
+#[derive(Args, Debug)]
+pub struct SetAiMaxTokensArgs {
+    /// The maximum number of tokens
+    pub max_tokens: usize,
 }
 
 #[derive(Args, Debug)]

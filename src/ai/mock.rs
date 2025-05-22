@@ -1,5 +1,5 @@
 use crate::ai::claude::ClaudeAction;
-use crate::commands::{Command, Workflow, WorkflowStep};
+use crate::commands::WorkflowStep;
 
 // Mock implementation for tests to avoid needing real API calls
 pub struct MockClaudeAssistant;
