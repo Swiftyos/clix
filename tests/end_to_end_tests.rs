@@ -355,14 +355,14 @@ async fn test_conditional_workflows(ctx: &mut E2ETestContext) {
 
     let results = CommandExecutor::execute_workflow(&workflow, None, Some(dev_vars)).unwrap();
     // Should execute the conditional step which executes the "then" block
-    assert!(results.len() >= 1);
+    assert!(!results.is_empty());
 
     // Test running workflow with prod environment
     let prod_vars = HashMap::from([("ENV".to_string(), "prod".to_string())]);
 
     let results = CommandExecutor::execute_workflow(&workflow, None, Some(prod_vars)).unwrap();
     // Should execute the conditional step which executes the "else" block
-    assert!(results.len() >= 1);
+    assert!(!results.is_empty());
 }
 
 /// Test branch workflows
@@ -425,19 +425,19 @@ async fn test_branch_workflows(ctx: &mut E2ETestContext) {
     let doc_vars = HashMap::from([("ITEM_TYPE".to_string(), "document".to_string())]);
 
     let results = CommandExecutor::execute_workflow(&workflow, None, Some(doc_vars)).unwrap();
-    assert!(results.len() >= 1);
+    assert!(!results.is_empty());
 
     // Test running workflow with image type
     let img_vars = HashMap::from([("ITEM_TYPE".to_string(), "image".to_string())]);
 
     let results = CommandExecutor::execute_workflow(&workflow, None, Some(img_vars)).unwrap();
-    assert!(results.len() >= 1);
+    assert!(!results.is_empty());
 
     // Test running workflow with unknown type (should use default case)
     let unknown_vars = HashMap::from([("ITEM_TYPE".to_string(), "unknown".to_string())]);
 
     let results = CommandExecutor::execute_workflow(&workflow, None, Some(unknown_vars)).unwrap();
-    assert!(results.len() >= 1);
+    assert!(!results.is_empty());
 }
 
 /// Test approval workflows
@@ -779,8 +779,9 @@ async fn test_comprehensive_integration(ctx: &mut E2ETestContext) {
                 "Validate Environment".to_string(),
                 "Check if environment is valid".to_string(),
                 Condition {
-                    expression: "[ \"$ENV\" = \"dev\" -o \"$ENV\" = \"staging\" -o \"$ENV\" = \"prod\" ]"
-                        .to_string(),
+                    expression:
+                        "[ \"$ENV\" = \"dev\" -o \"$ENV\" = \"staging\" -o \"$ENV\" = \"prod\" ]"
+                            .to_string(),
                     variable: None,
                 },
                 vec![WorkflowStep::new_command(
