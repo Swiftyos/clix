@@ -1,0 +1,20 @@
+[
+  {
+    "name": "List Files",
+    "command": "ls -la",
+    "description": "List all files in the current directory",
+    "continue_on_error": false
+  },
+  {
+    "name": "Show Current Directory",
+    "command": "pwd",
+    "description": "Print the current working directory",
+    "continue_on_error": true
+  },
+  {
+    "name": "Show System Info",
+    "command": "uname -a",
+    "description": "Display system information",
+    "continue_on_error": true
+  }
+]
