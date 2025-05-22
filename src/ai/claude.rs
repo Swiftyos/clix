@@ -743,10 +743,7 @@ Follow these guidelines:
 
         // If that fails, try to parse as a direct array of models
         if let Ok(models) = serde_json::from_str::<Vec<ModelInfo>>(&raw_response) {
-            let model_names = models
-                .into_iter()
-                .map(|model| model.id)
-                .collect();
+            let model_names = models.into_iter().map(|model| model.id).collect();
             return Ok(model_names);
         }
 
@@ -763,7 +760,9 @@ Follow these guidelines:
                                 for item in array {
                                     if let Some(name) = item.get("id").and_then(|v| v.as_str()) {
                                         model_names.push(name.to_string());
-                                    } else if let Some(name) = item.get("name").and_then(|v| v.as_str()) {
+                                    } else if let Some(name) =
+                                        item.get("name").and_then(|v| v.as_str())
+                                    {
                                         model_names.push(name.to_string());
                                     } else if let Some(name) = item.as_str() {
                                         model_names.push(name.to_string());
@@ -776,19 +775,19 @@ Follow these guidelines:
                         }
                     }
                 }
-                
+
                 Err(ClixError::CommandExecutionFailed(format!(
                     "Unexpected API response structure. Available fields: {:?}",
-                    json_value.as_object().map(|obj| obj.keys().collect::<Vec<_>>()).unwrap_or_default()
+                    json_value
+                        .as_object()
+                        .map(|obj| obj.keys().collect::<Vec<_>>())
+                        .unwrap_or_default()
                 )))
             }
-            Err(parse_err) => {
-                Err(ClixError::CommandExecutionFailed(format!(
-                    "Failed to parse Claude API response: {}. Raw response: {}",
-                    parse_err,
-                    raw_response
-                )))
-            }
+            Err(parse_err) => Err(ClixError::CommandExecutionFailed(format!(
+                "Failed to parse Claude API response: {}. Raw response: {}",
+                parse_err, raw_response
+            ))),
         }
     }
 

@@ -133,10 +133,10 @@ fn test_claude_list_models_api() {
             for (i, model) in models.iter().enumerate() {
                 println!("Model {}: {}", i + 1, model);
             }
-            
+
             // Basic validation - should have at least one model
             assert!(!models.is_empty(), "Should return at least one model");
-            
+
             // Check if we have common Claude models
             let has_claude_model = models.iter().any(|m| m.contains("claude"));
             println!("Has Claude model: {}", has_claude_model);
