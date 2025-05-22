@@ -162,7 +162,7 @@ impl CommandExecutor {
                 &mut context,
                 &mut results,
                 last_output.as_ref(),
-            )?;
+            );
 
             // Update the last_output if this step produced an output
             if let Ok(ref output) = result {
@@ -239,17 +239,15 @@ impl CommandExecutor {
         context: &mut WorkflowContext,
         results: &mut Vec<(String, Result<Output>)>,
         last_output: Option<&Output>,
-    ) -> Result<Result<Output>> {
+    ) -> Result<Output> {
         match step.step_type {
-            StepType::Command => Ok(Self::execute_command_step(step)),
-            StepType::Auth => Ok(Self::execute_auth_step(step)),
-            StepType::Conditional => Ok(Self::execute_conditional_step(
-                step,
-                &context.variables,
-                last_output,
-            )),
-            StepType::Branch => Ok(Self::execute_branch_step(step, context, results)),
-            StepType::Loop => Ok(Self::execute_loop_step(step, context, results)),
+            StepType::Command => Self::execute_command_step(step),
+            StepType::Auth => Self::execute_auth_step(step),
+            StepType::Conditional => {
+                Self::execute_conditional_step(step, &context.variables, last_output)
+            }
+            StepType::Branch => Self::execute_branch_step(step, context, results),
+            StepType::Loop => Self::execute_loop_step(step, context, results),
         }
     }
 

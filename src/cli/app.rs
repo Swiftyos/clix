@@ -251,7 +251,7 @@ pub struct AddWorkflowVarArgs {
     pub description: String,
 
     /// Default value for the variable
-    #[arg(long)]
+    #[arg(short = 'd', long)]
     pub default: Option<String>,
 
     /// Whether the variable is required

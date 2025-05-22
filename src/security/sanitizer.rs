@@ -188,8 +188,11 @@ impl CommandSanitizer {
         // Remove null bytes
         sanitized = sanitized.replace('\0', "");
 
-        // Remove or escape potential script tags and similar
-        sanitized = sanitized.replace("<script", "&lt;script");
+        // Remove or escape potential script tags and similar (case-insensitive)
+        let script_tag_re = Regex::new(r"(?i)<script").unwrap();
+        sanitized = script_tag_re
+            .replace_all(&sanitized, "&lt;script")
+            .to_string();
         sanitized = sanitized.replace("javascript:", "");
         sanitized = sanitized.replace("data:", "");
 
