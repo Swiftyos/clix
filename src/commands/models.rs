@@ -109,3 +109,9 @@ impl CommandStore {
         }
     }
 }
+
+impl Default for CommandStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}

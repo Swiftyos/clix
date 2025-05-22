@@ -147,11 +147,10 @@ fn run() -> Result<()> {
             let tags = add_args.tags.unwrap_or_else(Vec::new);
 
             // Read steps from JSON file
-            let steps_json =
-                fs::read_to_string(&add_args.steps_file).map_err(|e| ClixError::Io(e))?;
+            let steps_json = fs::read_to_string(&add_args.steps_file).map_err(ClixError::Io)?;
 
             let steps: Vec<WorkflowStep> =
-                serde_json::from_str(&steps_json).map_err(|e| ClixError::Serialization(e))?;
+                serde_json::from_str(&steps_json).map_err(ClixError::Serialization)?;
 
             let workflow = Workflow::new(add_args.name, add_args.description, steps, tags);
 

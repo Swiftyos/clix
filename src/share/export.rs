@@ -4,7 +4,6 @@ use crate::storage::Storage;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExportData {
@@ -134,10 +133,9 @@ impl ExportManager {
         };
 
         // Serialize to JSON and write to file
-        let json =
-            serde_json::to_string_pretty(&export_data).map_err(|e| ClixError::Serialization(e))?;
+        let json = serde_json::to_string_pretty(&export_data).map_err(ClixError::Serialization)?;
 
-        fs::write(output_path, json).map_err(|e| ClixError::Io(e))?;
+        fs::write(output_path, json).map_err(ClixError::Io)?;
 
         Ok(())
     }
