@@ -1,31 +1,42 @@
 {
-  // Example workflow demonstrating authentication handling
-  // This workflow shows how to use the "Auth" step type to pause execution
-  // and wait for user interaction during authentication processes
-  "name": "gcloud-deploy",
-  "description": "Authenticate with Google Cloud and deploy an application",
-  "steps": [
-    {
-      "name": "Authenticate with Google Cloud",
-      "command": "gcloud auth login",
-      "description": "Login to Google Cloud using your credentials",
-      "continue_on_error": false,
-      "step_type": "Auth"
-    },
-    {
-      "name": "Configure GCP project",
-      "command": "gcloud config set project my-gcp-project",
-      "description": "Set the current GCP project",
-      "continue_on_error": false,
-      "step_type": "Command"
-    },
-    {
-      "name": "Deploy application",
-      "command": "gcloud app deploy",
-      "description": "Deploy the application to Google App Engine",
-      "continue_on_error": false,
-      "step_type": "Command"
+  "version": "0.1.0",
+  "metadata": {
+    "exported_at": 1684756234,
+    "exported_by": "developer1",
+    "description": "Example authentication workflow"
+  },
+  "commands": {},
+  "workflows": {
+    "gcloud-deploy": {
+      "name": "gcloud-deploy",
+      "description": "Authenticate with Google Cloud and deploy an application",
+      "steps": [
+        {
+          "name": "Authenticate with Google Cloud",
+          "command": "gcloud auth login",
+          "description": "Login to Google Cloud using your credentials",
+          "continue_on_error": false,
+          "step_type": "Auth"
+        },
+        {
+          "name": "Configure GCP project",
+          "command": "gcloud config set project my-gcp-project",
+          "description": "Set the current GCP project",
+          "continue_on_error": false,
+          "step_type": "Command"
+        },
+        {
+          "name": "Deploy application",
+          "command": "gcloud app deploy",
+          "description": "Deploy the application to Google App Engine",
+          "continue_on_error": false,
+          "step_type": "Command"
+        }
+      ],
+      "created_at": 1684756000,
+      "last_used": null,
+      "use_count": 0,
+      "tags": ["gcp", "deploy", "auth-example"]
     }
-  ],
-  "tags": ["gcp", "deploy", "auth-example"]
+  }
 }

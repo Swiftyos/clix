@@ -1,20 +1,49 @@
-[
-  {
-    "name": "List Files",
-    "command": "ls -la",
-    "description": "List all files in the current directory",
-    "continue_on_error": false
+{
+  "version": "0.1.0",
+  "metadata": {
+    "exported_at": 1684756234,
+    "exported_by": "developer1",
+    "description": "Example basic workflow"
   },
-  {
-    "name": "Show Current Directory",
-    "command": "pwd",
-    "description": "Print the current working directory",
-    "continue_on_error": true
-  },
-  {
-    "name": "Show System Info",
-    "command": "uname -a",
-    "description": "Display system information",
-    "continue_on_error": true
+  "commands": {},
+  "workflows": {
+    "basic-workflow": {
+      "name": "basic-workflow",
+      "description": "A simple workflow for basic file operations",
+      "steps": [
+        {
+          "name": "List Files",
+          "command": "ls -la",
+          "description": "List all files in the current directory",
+          "continue_on_error": false,
+          "step_type": "Command"
+        },
+        {
+          "name": "Show Current Directory",
+          "command": "pwd",
+          "description": "Show the current working directory",
+          "continue_on_error": false,
+          "step_type": "Command"
+        },
+        {
+          "name": "Create Test Directory",
+          "command": "mkdir -p test_dir",
+          "description": "Create a test directory if it doesn't exist",
+          "continue_on_error": true,
+          "step_type": "Command"
+        },
+        {
+          "name": "Check Test Directory",
+          "command": "ls -la test_dir",
+          "description": "Check the contents of the test directory",
+          "continue_on_error": false,
+          "step_type": "Command"
+        }
+      ],
+      "created_at": 1684756000,
+      "last_used": null,
+      "use_count": 0,
+      "tags": ["example", "basic"]
+    }
   }
-]
+}
