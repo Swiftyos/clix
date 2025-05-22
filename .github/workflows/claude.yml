@@ -34,5 +34,6 @@ jobs:
         uses: anthropics/claude-code-action@beta
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          allowed_tools: "Bash(cargo fmt),Bash(cargo test),Bash(cargo clippy --all-targets --all-features),Bash(cargo clippy --fix)"
+          allowed_tools: "Bash(cargo fmt),Bash(cargo clippy:*),Bash(cargo nextest:*),Bash(cargo test)"
+
 
