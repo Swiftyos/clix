@@ -1,10 +1,12 @@
-use clix::commands::{Command, Workflow, WorkflowStep, WorkflowVariable, WorkflowVariableProfile, CommandExecutor};
+use clix::SettingsManager;
+use clix::ai::claude::ClaudeAction;
+use clix::ai::mock::MockClaudeAssistant;
 use clix::commands::models::{BranchCase, Condition, ConditionalAction, StepType};
+use clix::commands::{
+    Command, CommandExecutor, Workflow, WorkflowStep, WorkflowVariable, WorkflowVariableProfile,
+};
 use clix::share::{ExportManager, ImportManager};
 use clix::storage::Storage;
-use clix::ai::mock::MockClaudeAssistant;
-use clix::ai::claude::ClaudeAction;
-use clix::SettingsManager;
 use std::collections::HashMap;
 use std::env;
 use std::fs;
@@ -40,7 +42,11 @@ impl AsyncTestContext for E2ETestContext {
             let storage = Storage::new().unwrap();
             let settings_manager = SettingsManager::new().unwrap();
 
-            E2ETestContext { temp_dir, storage, settings_manager }
+            E2ETestContext {
+                temp_dir,
+                storage,
+                settings_manager,
+            }
         })
     }
 
@@ -67,7 +73,12 @@ async fn test_basic_command_operations(ctx: &mut E2ETestContext) {
     let command2 = Command::new(
         "test-date".to_string(),
         "Show current date".to_string(),
-        if cfg!(target_os = "windows") { "echo %date%" } else { "date" }.to_string(),
+        if cfg!(target_os = "windows") {
+            "echo %date%"
+        } else {
+            "date"
+        }
+        .to_string(),
         vec!["test".to_string(), "time".to_string()],
     );
 
@@ -78,7 +89,7 @@ async fn test_basic_command_operations(ctx: &mut E2ETestContext) {
     // Test listing commands
     let commands = ctx.storage.list_commands().unwrap();
     assert_eq!(commands.len(), 2);
-    
+
     let cmd_names: Vec<&str> = commands.iter().map(|c| c.name.as_str()).collect();
     assert!(cmd_names.contains(&"test-echo"));
     assert!(cmd_names.contains(&"test-date"));
@@ -161,7 +172,7 @@ async fn test_workflow_operations(ctx: &mut E2ETestContext) {
     // Test running a workflow
     let results = CommandExecutor::execute_workflow(&retrieved_workflow, None, None).unwrap();
     assert_eq!(results.len(), 3);
-    
+
     // Verify all steps executed successfully
     for (step_name, result) in results {
         assert!(result.is_ok(), "Step '{}' failed: {:?}", step_name, result);
@@ -263,7 +274,7 @@ async fn test_workflow_variables_and_profiles(ctx: &mut E2ETestContext) {
     // Test running workflow with development profile
     let results = CommandExecutor::execute_workflow(&workflow, Some("development"), None).unwrap();
     assert_eq!(results.len(), 2);
-    
+
     // Verify the environment variable was substituted correctly in the output
     for (step_name, result) in &results {
         assert!(result.is_ok(), "Step '{}' failed: {:?}", step_name, result);
@@ -433,7 +444,7 @@ async fn test_branch_workflows(ctx: &mut E2ETestContext) {
     let results = CommandExecutor::execute_workflow(&workflow, None, Some(doc_vars)).unwrap();
     assert!(results.len() >= 1);
 
-    // Test running workflow with image type  
+    // Test running workflow with image type
     let img_vars = {
         let mut vars = HashMap::new();
         vars.insert("ITEM_TYPE".to_string(), "image".to_string());
@@ -477,7 +488,8 @@ async fn test_approval_workflows(ctx: &mut E2ETestContext) {
             "echo 'Workflow complete'".to_string(),
             "Final operation".to_string(),
             false,
-        ).with_approval(), // Alternative way to set approval
+        )
+        .with_approval(), // Alternative way to set approval
     ];
 
     let workflow = Workflow::new(
@@ -588,16 +600,18 @@ async fn test_export_import_e2e(ctx: &mut E2ETestContext) {
     // Create new storage for import test
     let import_temp_dir = ctx.temp_dir.join("import_test");
     fs::create_dir_all(&import_temp_dir).unwrap();
-    
+
     unsafe {
         env::set_var("HOME", &import_temp_dir);
     }
-    
+
     let import_storage = Storage::new().unwrap();
     let import_manager = ImportManager::new(import_storage.clone());
 
     // Test import
-    let summary = import_manager.import_from_file(export_path_str, false).unwrap();
+    let summary = import_manager
+        .import_from_file(export_path_str, false)
+        .unwrap();
 
     // Verify import results
     assert_eq!(summary.commands_added, 1);
@@ -618,23 +632,27 @@ async fn test_export_import_e2e(ctx: &mut E2ETestContext) {
     let commands_only_path = ctx.temp_dir.join("commands_only.json");
     let commands_only_path_str = commands_only_path.to_str().unwrap();
 
-    export_manager.export_with_filter(
-        commands_only_path_str,
-        None,
-        true,  // commands only
-        false,
-    ).unwrap();
+    export_manager
+        .export_with_filter(
+            commands_only_path_str,
+            None,
+            true, // commands only
+            false,
+        )
+        .unwrap();
 
     // Test filtered export (workflows only)
     let workflows_only_path = ctx.temp_dir.join("workflows_only.json");
     let workflows_only_path_str = workflows_only_path.to_str().unwrap();
 
-    export_manager.export_with_filter(
-        workflows_only_path_str,
-        None,
-        false,
-        true,  // workflows only
-    ).unwrap();
+    export_manager
+        .export_with_filter(
+            workflows_only_path_str,
+            None,
+            false,
+            true, // workflows only
+        )
+        .unwrap();
 
     // Verify filtered exports
     assert!(commands_only_path.exists());
@@ -649,9 +667,13 @@ async fn test_ai_integration_mocked(_ctx: &mut E2ETestContext) {
     let (response, action) = MockClaudeAssistant::mock_response("create command to list files");
 
     assert!(response.contains("CREATE COMMAND"));
-    
+
     match action {
-        ClaudeAction::CreateCommand { name, description, command } => {
+        ClaudeAction::CreateCommand {
+            name,
+            description,
+            command,
+        } => {
             assert_eq!(name, "test-echo");
             assert_eq!(description, "Echo a test message");
             assert_eq!(command, "echo \"This is a test\"");
@@ -660,12 +682,17 @@ async fn test_ai_integration_mocked(_ctx: &mut E2ETestContext) {
     }
 
     // Test AI workflow creation using mock
-    let (workflow_response, workflow_action) = MockClaudeAssistant::mock_response("create workflow for deployment");
+    let (workflow_response, workflow_action) =
+        MockClaudeAssistant::mock_response("create workflow for deployment");
 
     assert!(workflow_response.contains("CREATE WORKFLOW"));
-    
+
     match workflow_action {
-        ClaudeAction::CreateWorkflow { name, description, steps } => {
+        ClaudeAction::CreateWorkflow {
+            name,
+            description,
+            steps,
+        } => {
             assert_eq!(name, "test-workflow");
             assert_eq!(description, "A test workflow");
             assert_eq!(steps.len(), 2);
@@ -675,9 +702,9 @@ async fn test_ai_integration_mocked(_ctx: &mut E2ETestContext) {
 
     // Test run command action
     let (run_response, run_action) = MockClaudeAssistant::mock_response("run command list-files");
-    
+
     assert!(run_response.contains("RUN COMMAND"));
-    
+
     match run_action {
         ClaudeAction::RunCommand(name) => {
             assert_eq!(name, "list-files");
@@ -686,10 +713,11 @@ async fn test_ai_integration_mocked(_ctx: &mut E2ETestContext) {
     }
 
     // Test run workflow action
-    let (run_wf_response, run_wf_action) = MockClaudeAssistant::mock_response("run workflow deploy-app");
-    
+    let (run_wf_response, run_wf_action) =
+        MockClaudeAssistant::mock_response("run workflow deploy-app");
+
     assert!(run_wf_response.contains("RUN WORKFLOW"));
-    
+
     match run_wf_action {
         ClaudeAction::RunWorkflow(name) => {
             assert_eq!(name, "deploy-app");
@@ -698,10 +726,11 @@ async fn test_ai_integration_mocked(_ctx: &mut E2ETestContext) {
     }
 
     // Test no action case
-    let (no_action_response, no_action) = MockClaudeAssistant::mock_response("what is the weather like?");
-    
+    let (no_action_response, no_action) =
+        MockClaudeAssistant::mock_response("what is the weather like?");
+
     assert!(no_action_response.contains("INFO"));
-    
+
     match no_action {
         ClaudeAction::NoAction => {
             // Expected
@@ -721,7 +750,9 @@ async fn test_settings_management(ctx: &mut E2ETestContext) {
     assert!(settings.ai_settings.max_tokens > 0);
 
     // Test updating AI model
-    ctx.settings_manager.update_ai_model("claude-3-sonnet-20240229").unwrap();
+    ctx.settings_manager
+        .update_ai_model("claude-3-sonnet-20240229")
+        .unwrap();
     let updated_settings = ctx.settings_manager.load().unwrap();
     assert_eq!(updated_settings.ai_model, "claude-3-sonnet-20240229");
 
@@ -772,8 +803,9 @@ async fn test_comprehensive_integration(ctx: &mut E2ETestContext) {
                 "Validate Environment".to_string(),
                 "Check if environment is valid".to_string(),
                 Condition {
-                    expression: "[ \"$ENV\" = \"dev\" -o \"$ENV\" = \"staging\" -o \"$ENV\" = \"prod\" ]"
-                        .to_string(),
+                    expression:
+                        "[ \"$ENV\" = \"dev\" -o \"$ENV\" = \"staging\" -o \"$ENV\" = \"prod\" ]"
+                            .to_string(),
                     variable: None,
                 },
                 vec![WorkflowStep::new_command(
@@ -835,14 +867,12 @@ async fn test_comprehensive_integration(ctx: &mut E2ETestContext) {
             ),
         ],
         vec!["deployment".to_string(), "integration".to_string()],
-        vec![
-            WorkflowVariable::new(
-                "ENV".to_string(),
-                "Target environment".to_string(),
-                Some("dev".to_string()),
-                true,
-            ),
-        ],
+        vec![WorkflowVariable::new(
+            "ENV".to_string(),
+            "Target environment".to_string(),
+            Some("dev".to_string()),
+            true,
+        )],
     );
 
     ctx.storage.add_workflow(complex_workflow).unwrap();
@@ -850,7 +880,9 @@ async fn test_comprehensive_integration(ctx: &mut E2ETestContext) {
     // Test exporting everything
     let export_path = ctx.temp_dir.join("comprehensive_export.json");
     let export_manager = ExportManager::new(ctx.storage.clone());
-    export_manager.export_all(export_path.to_str().unwrap()).unwrap();
+    export_manager
+        .export_all(export_path.to_str().unwrap())
+        .unwrap();
 
     // Test running the complex workflow with different environments
     let workflow = ctx.storage.get_workflow("full-deployment").unwrap();
@@ -880,7 +912,7 @@ async fn test_comprehensive_integration(ctx: &mut E2ETestContext) {
     // Verify all data is present
     let all_commands = ctx.storage.list_commands().unwrap();
     let all_workflows = ctx.storage.list_workflows().unwrap();
-    
+
     assert_eq!(all_commands.len(), 2);
     assert_eq!(all_workflows.len(), 1);
 
