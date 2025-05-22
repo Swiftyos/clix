@@ -84,11 +84,7 @@ impl WorkflowStep {
         }
     }
 
-    pub fn new_auth(
-        name: String,
-        command: String,
-        description: String,
-    ) -> Self {
+    pub fn new_auth(name: String, command: String, description: String) -> Self {
         WorkflowStep {
             name,
             command,

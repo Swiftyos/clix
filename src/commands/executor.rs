@@ -105,7 +105,7 @@ impl CommandExecutor {
                 .output()
         };
 
-        let result = match output {
+        match output {
             Ok(output) => {
                 // Display the output to the user
                 if !output.stdout.is_empty() {
@@ -120,34 +120,40 @@ impl CommandExecutor {
 
                 println!(
                     "\n{}",
-                    "This step requires authentication. Please follow the instructions above.".yellow().bold()
+                    "This step requires authentication. Please follow the instructions above."
+                        .yellow()
+                        .bold()
                 );
-                println!("{}", "Press Enter when you have completed the authentication process...".yellow());
+                println!(
+                    "{}",
+                    "Press Enter when you have completed the authentication process...".yellow()
+                );
 
                 // Wait for user to confirm they've completed the auth process
                 let stdin = io::stdin();
                 let mut handle = stdin.lock();
                 let mut input = String::new();
-                
+
                 // Flush stdout to ensure prompts are displayed
                 io::stdout().flush().map_err(|e| {
                     ClixError::CommandExecutionFailed(format!("Failed to flush stdout: {}", e))
                 })?;
-                
+
                 handle.read_line(&mut input).map_err(|e| {
                     ClixError::CommandExecutionFailed(format!("Failed to read user input: {}", e))
                 })?;
 
-                println!("{}", "Authentication confirmed, continuing workflow.".green());
+                println!(
+                    "{}",
+                    "Authentication confirmed, continuing workflow.".green()
+                );
                 Ok(output)
             }
             Err(e) => Err(ClixError::CommandExecutionFailed(format!(
                 "Failed to execute auth command: {}",
                 e
             ))),
-        };
-
-        result
+        }
     }
 
     pub fn print_command_output(output: &Output) {
