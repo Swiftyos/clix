@@ -52,6 +52,7 @@ struct ErrorResponse {
 #[derive(Debug, Deserialize)]
 struct ApiError {
     #[serde(rename = "type")]
+    #[allow(dead_code)]
     error_type: String,
     message: String,
 }
@@ -165,28 +166,31 @@ impl ClaudeAssistant {
             .map_err(|e| {
                 ClixError::CommandExecutionFailed(format!("Failed to call Claude API: {}", e))
             })?;
-            
+
         // Get the raw response body first
         let raw_response = response.text().map_err(|e| {
             ClixError::CommandExecutionFailed(format!("Failed to get raw response body: {}", e))
         })?;
-        
+
         // Print the raw response for debugging
         println!("Raw API response: {}", raw_response);
-        
+
         // Check if this is an error response
         if raw_response.contains("\"type\":\"error\"") {
-            let error_response: ErrorResponse = serde_json::from_str(&raw_response).map_err(|e| {
-                ClixError::CommandExecutionFailed(format!("Failed to parse error response: {}", e))
-            })?;
-            
+            let error_response: ErrorResponse =
+                serde_json::from_str(&raw_response).map_err(|e| {
+                    ClixError::CommandExecutionFailed(format!(
+                        "Failed to parse error response: {}",
+                        e
+                    ))
+                })?;
+
             return Err(ClixError::CommandExecutionFailed(format!(
-                "API Error: {} - {}", 
-                error_response.error_type, 
-                error_response.error.message
+                "API Error: {} - {}",
+                error_response.error_type, error_response.error.message
             )));
         }
-        
+
         // Now parse the response as a successful response
         let claude_response: ClaudeResponse = serde_json::from_str(&raw_response).map_err(|e| {
             ClixError::CommandExecutionFailed(format!("Failed to parse Claude API response: {}", e))
