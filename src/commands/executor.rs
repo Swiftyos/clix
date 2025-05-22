@@ -5,12 +5,27 @@ use crate::error::{ClixError, Result};
 use colored::Colorize;
 use std::collections::HashMap;
 use std::io::{self, BufRead, Write};
+// `ExitStatusExt` is platform specific, so import the correct version
+#[cfg(unix)]
 use std::os::unix::process::ExitStatusExt;
+#[cfg(windows)]
+use std::os::windows::process::ExitStatusExt;
 use std::process::{Command as ProcessCommand, Output};
 
 pub struct CommandExecutor;
 
 impl CommandExecutor {
+    /// Create an ExitStatus from a raw code in a cross-platform way
+    #[cfg(unix)]
+    fn exit_status(code: i32) -> std::process::ExitStatus {
+        std::process::ExitStatus::from_raw(code)
+    }
+
+    #[cfg(windows)]
+    fn exit_status(code: i32) -> std::process::ExitStatus {
+        std::process::ExitStatus::from_raw(code as u32)
+    }
+
     pub fn execute_command(command: &Command) -> Result<Output> {
         println!("{} {}", "Executing:".blue().bold(), command.name);
         println!("{} {}", "Description:".blue().bold(), command.description);
@@ -265,7 +280,7 @@ impl CommandExecutor {
                     Ok(output)
                 } else {
                     Ok(Output {
-                        status: std::process::ExitStatus::from_raw(0),
+                        status: Self::exit_status(0),
                         stdout: Vec::new(),
                         stderr: Vec::new(),
                     })
@@ -346,7 +361,7 @@ impl CommandExecutor {
                         Ok(output)
                     } else {
                         Ok(Output {
-                            status: std::process::ExitStatus::from_raw(0),
+                            status: Self::exit_status(0),
                             stdout: Vec::new(),
                             stderr: Vec::new(),
                         })
@@ -354,7 +369,7 @@ impl CommandExecutor {
                 } else {
                     // No else block, return a success output
                     Ok(Output {
-                        status: std::process::ExitStatus::from_raw(0),
+                        status: Self::exit_status(0),
                         stdout: Vec::new(),
                         stderr: Vec::new(),
                     })
@@ -364,7 +379,7 @@ impl CommandExecutor {
                 println!("{}", "Skipping conditional block".blue().bold());
                 // Return a success output
                 Ok(Output {
-                    status: std::process::ExitStatus::from_raw(0),
+                    status: Self::exit_status(0),
                     stdout: Vec::new(),
                     stderr: Vec::new(),
                 })
@@ -379,7 +394,7 @@ impl CommandExecutor {
                 println!("{} {}", "Returning with exit code:".yellow().bold(), code);
                 // Create an output with the specified exit code
                 Ok(Output {
-                    status: std::process::ExitStatus::from_raw(code),
+                    status: Self::exit_status(code),
                     stdout: Vec::new(),
                     stderr: Vec::new(),
                 })
@@ -425,7 +440,7 @@ impl CommandExecutor {
             );
             // Return a success output since we're not treating this as an error
             return Ok(Output {
-                status: std::process::ExitStatus::from_raw(0),
+                status: Self::exit_status(0),
                 stdout: Vec::new(),
                 stderr: Vec::new(),
             });
@@ -491,7 +506,7 @@ impl CommandExecutor {
             Ok(output)
         } else {
             Ok(Output {
-                status: std::process::ExitStatus::from_raw(0),
+                status: Self::exit_status(0),
                 stdout: Vec::new(),
                 stderr: Vec::new(),
             })
@@ -610,7 +625,7 @@ impl CommandExecutor {
             Ok(output)
         } else {
             Ok(Output {
-                status: std::process::ExitStatus::from_raw(0),
+                status: Self::exit_status(0),
                 stdout: Vec::new(),
                 stderr: Vec::new(),
             })
