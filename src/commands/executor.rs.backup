@@ -2,7 +2,6 @@ use crate::commands::expression::ExpressionEvaluator;
 use crate::commands::models::{Command, ConditionalAction, StepType, Workflow, WorkflowStep};
 use crate::commands::variables::{VariableProcessor, WorkflowContext};
 use crate::error::{ClixError, Result};
-use crate::security::{SecurityValidator, CommandSanitizer, SecurityConfig};
 use colored::Colorize;
 use std::collections::HashMap;
 use std::io::{self, BufRead, Write};
@@ -16,9 +15,6 @@ impl CommandExecutor {
         println!("{} {}", "Executing:".blue().bold(), command.name);
         println!("{} {}", "Description:".blue().bold(), command.description);
         println!("{} {}", "Command:".blue().bold(), command.command);
-
-        // Security validation
-        Self::validate_command_security(&command.command)?;
 
         let output = if cfg!(target_os = "windows") {
             ProcessCommand::new("cmd")
@@ -39,75 +35,6 @@ impl CommandExecutor {
         }
     }
 
-    /// Validate command security before execution
-    fn validate_command_security(command: &str) -> Result<()> {
-        let config = SecurityConfig::default();
-        let validator = SecurityValidator::new(config);
-        
-        // Sanitize the command first
-        let sanitized_command = CommandSanitizer::sanitize_command(command)?;
-        
-        // Validate for security issues
-        let security_check = validator.validate_command(&sanitized_command)?;
-        
-        if !security_check.is_safe {
-            println!("{}", "Security Warning:".red().bold());
-            for issue in &security_check.issues {
-                println!("  ⚠️  {}", issue.yellow());
-            }
-            
-            // Get recommendations
-            let recommendations = validator.get_security_recommendations(&sanitized_command);
-            if !recommendations.is_empty() {
-                println!("\n{}", "Security Recommendations:".blue().bold());
-                for rec in recommendations {
-                    println!("  💡 {}", rec);
-                }
-            }
-            
-            // For now, we'll warn but still allow execution
-            // In production, you might want to block dangerous commands
-            println!("\n{}", "⚠️  Command has security concerns but will be executed. Use with caution!".yellow().bold());
-        }
-        
-        if security_check.requires_approval {
-            println!("{}", "This command requires additional approval due to security concerns.".yellow().bold());
-            Self::request_security_approval(&sanitized_command)?;
-        }
-        
-        Ok(())
-    }
-
-    /// Request security approval from user
-    fn request_security_approval(command: &str) -> Result<()> {
-        println!("{}", "🔒 Security Approval Required".red().bold());
-        println!("{} {}", "Command:".blue().bold(), command);
-        println!("{}", "This command has been flagged for security review.".yellow());
-        
-        print!("{} [y/N]: ", "Do you want to proceed with execution?".yellow().bold());
-        io::stdout().flush().map_err(|e| {
-            ClixError::CommandExecutionFailed(format!("Failed to flush stdout: {}", e))
-        })?;
-
-        let stdin = io::stdin();
-        let mut handle = stdin.lock();
-        let mut input = String::new();
-
-        handle.read_line(&mut input).map_err(|e| {
-            ClixError::CommandExecutionFailed(format!("Failed to read security approval input: {}", e))
-        })?;
-
-        let input = input.trim().to_lowercase();
-        if input == "y" || input == "yes" {
-            println!("{}", "✅ Security approval granted, proceeding with execution.".green());
-            Ok(())
-        } else {
-            Err(ClixError::SecurityError(
-                "Command execution blocked by security policy".to_string(),
-            ))
-        }
-    }
-
     pub fn execute_workflow(
         workflow: &Workflow,
         profile_name: Option<&str>,
@@ -115,9 +42,6 @@ impl CommandExecutor {
     ) -> Result<Vec<(String, Result<Output>)>> {
         println!("{} {}", "Executing workflow:".blue().bold(), workflow.name);
         println!("{} {}", "Description:".blue().bold(), workflow.description);
-
-        // Security validation for the entire workflow
-        Self::validate_workflow_security(workflow)?;
 
         let mut context = Self::setup_workflow_context(workflow, profile_name, provided_vars)?;
         let mut results = Vec::new();
@@ -228,74 +152,6 @@ impl CommandExecutor {
         match result {
             Ok(_) => true,
             Err(_) => step.continue_on_error,
-        }
-    }
-
-    /// Validate workflow security before execution
-    fn validate_workflow_security(workflow: &Workflow) -> Result<()> {
-        let config = SecurityConfig::default();
-        let validator = SecurityValidator::new(config);
-        
-        let security_report = validator.validate_workflow(workflow)?;
-        
-        if !security_report.is_safe {
-            println!("{}", "🔒 Workflow Security Warning".red().bold());
-            println!("{}: {}", "Workflow".blue().bold(), security_report.workflow_name);
-            
-            for issue in &security_report.issues {
-                println!("  ⚠️  {}", issue.yellow());
-            }
-            
-            println!("\n{}", "Step-by-step security report:".blue().bold());
-            for step_report in &security_report.step_reports {
-                if !step_report.is_safe {
-                    println!("  📋 {}: {}", "Step".yellow().bold(), step_report.step_name);
-                    for issue in &step_report.issues {
-                        println!("    ⚠️  {}", issue.yellow());
-                    }
-                }
-            }
-            
-            println!("\n{}", "⚠️  Workflow has security concerns but will be executed. Use with caution!".yellow().bold());
-        }
-        
-        if security_report.requires_approval {
-            println!("{}", "This workflow requires additional security approval.".yellow().bold());
-            Self::request_workflow_security_approval(workflow)?;
-        }
-        
-        Ok(())
-    }
-
-    /// Request workflow-level security approval
-    fn request_workflow_security_approval(workflow: &Workflow) -> Result<()> {
-        println!("{}", "🔒 Workflow Security Approval Required".red().bold());
-        println!("{} {}", "Workflow:".blue().bold(), workflow.name);
-        println!("{} {}", "Description:".blue().bold(), workflow.description);
-        println!("{} {}", "Steps:".blue().bold(), workflow.steps.len());
-        println!("{}", "This workflow contains steps that require security review.".yellow());
-        
-        print!("{} [y/N]: ", "Do you want to proceed with workflow execution?".yellow().bold());
-        io::stdout().flush().map_err(|e| {
-            ClixError::CommandExecutionFailed(format!("Failed to flush stdout: {}", e))
-        })?;
-
-        let stdin = io::stdin();
-        let mut handle = stdin.lock();
-        let mut input = String::new();
-
-        handle.read_line(&mut input).map_err(|e| {
-            ClixError::CommandExecutionFailed(format!("Failed to read workflow security approval input: {}", e))
-        })?;
-
-        let input = input.trim().to_lowercase();
-        if input == "y" || input == "yes" {
-            println!("{}", "✅ Workflow security approval granted, proceeding with execution.".green());
-            Ok(())
-        } else {
-            Err(ClixError::SecurityError(
-                "Workflow execution blocked by security policy".to_string(),
-            ))
         }
     }
 

@@ -1,4 +1,4 @@
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -37,6 +37,9 @@ pub enum Commands {
     /// Settings management commands
     #[command(subcommand)]
     Settings(SettingsCommands),
+
+    /// Generate shell completions
+    Completions(CompletionsArgs),
 }
 
 #[derive(Subcommand, Debug)]
@@ -248,7 +251,7 @@ pub struct AddWorkflowVarArgs {
     pub description: String,
 
     /// Default value for the variable
-    #[arg(short, long)]
+    #[arg(long)]
     pub default: Option<String>,
 
     /// Whether the variable is required
@@ -340,7 +343,7 @@ pub struct AddBranchArgs {
     pub cases_file: String,
 
     /// Default case steps file (optional)
-    #[arg(short, long)]
+    #[arg(long)]
     pub default_file: Option<String>,
 }
 
@@ -354,7 +357,7 @@ pub struct ConvertFunctionArgs {
     pub file: String,
 
     /// Name of the function to convert
-    #[arg(short, long)]
+    #[arg(long)]
     pub function: String,
 
     /// Description of the workflow
@@ -364,4 +367,20 @@ pub struct ConvertFunctionArgs {
     /// Optional tags for categorization
     #[arg(short, long)]
     pub tags: Option<Vec<String>>,
+}
+
+#[derive(Args, Debug)]
+pub struct CompletionsArgs {
+    /// The shell to generate completions for
+    #[arg(value_enum)]
+    pub shell: Shell,
+}
+
+#[derive(ValueEnum, Clone, Debug)]
+pub enum Shell {
+    Bash,
+    Zsh,
+    Fish,
+    PowerShell,
+    Elvish,
 }

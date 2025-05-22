@@ -2,6 +2,7 @@ pub mod ai;
 pub mod cli;
 pub mod commands;
 pub mod error;
+pub mod security;
 pub mod settings;
 pub mod share;
 pub mod storage;
