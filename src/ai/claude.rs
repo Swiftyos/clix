@@ -25,19 +25,40 @@ struct ClaudeRequest {
 #[derive(Debug, Serialize, Deserialize)]
 struct Message {
     role: String,
-    content: Vec<Content>,
+    content: Vec<RequestContent>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(untagged)]
-enum Content {
-    Text { text: String },
+struct RequestContent {
+    #[serde(rename = "type")]
+    content_type: String,
+    text: String,
 }
 
-// Claude response models
+// Claude response models - normal response
 #[derive(Debug, Deserialize)]
 struct ClaudeResponse {
     content: Vec<ContentBlock>,
+}
+
+// Error response structure
+#[derive(Debug, Deserialize)]
+struct ErrorResponse {
+    #[serde(rename = "type")]
+    error_type: String,
+    error: ApiError,
+}
+
+#[derive(Debug, Deserialize)]
+struct ApiError {
+    #[serde(rename = "type")]
+    error_type: String,
+    message: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ContentBlock {
+    text: String,
 }
 
 // Models list response
@@ -52,11 +73,6 @@ struct ModelInfo {
     name: String,
     description: String,
     max_tokens: u32,
-}
-
-#[derive(Debug, Deserialize)]
-struct ContentBlock {
-    text: String,
 }
 
 // The possible actions Claude might suggest
@@ -118,7 +134,8 @@ impl ClaudeAssistant {
         // Create user message
         let user_message = Message {
             role: "user".to_string(),
-            content: vec![Content::Text {
+            content: vec![RequestContent {
+                content_type: "text".to_string(),
                 text: question.to_string(),
             }],
         };
@@ -148,9 +165,30 @@ impl ClaudeAssistant {
             .map_err(|e| {
                 ClixError::CommandExecutionFailed(format!("Failed to call Claude API: {}", e))
             })?;
-
-        // Parse response
-        let claude_response: ClaudeResponse = response.json().map_err(|e| {
+            
+        // Get the raw response body first
+        let raw_response = response.text().map_err(|e| {
+            ClixError::CommandExecutionFailed(format!("Failed to get raw response body: {}", e))
+        })?;
+        
+        // Print the raw response for debugging
+        println!("Raw API response: {}", raw_response);
+        
+        // Check if this is an error response
+        if raw_response.contains("\"type\":\"error\"") {
+            let error_response: ErrorResponse = serde_json::from_str(&raw_response).map_err(|e| {
+                ClixError::CommandExecutionFailed(format!("Failed to parse error response: {}", e))
+            })?;
+            
+            return Err(ClixError::CommandExecutionFailed(format!(
+                "API Error: {} - {}", 
+                error_response.error_type, 
+                error_response.error.message
+            )));
+        }
+        
+        // Now parse the response as a successful response
+        let claude_response: ClaudeResponse = serde_json::from_str(&raw_response).map_err(|e| {
             ClixError::CommandExecutionFailed(format!("Failed to parse Claude API response: {}", e))
         })?;
 
@@ -158,7 +196,7 @@ impl ClaudeAssistant {
         let text = claude_response
             .content
             .iter()
-            .map(|block| block.text.clone())
+            .map(|content| content.text.clone())
             .collect::<Vec<String>>()
             .join("\n");
 
