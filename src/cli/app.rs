@@ -15,26 +15,36 @@ pub enum Commands {
     /// Run a stored command
     Run(RunArgs),
 
-    /// List all stored commands
+    /// List all stored commands and workflows
     List(ListArgs),
 
     /// Remove a stored command
     Remove(RemoveArgs),
 
-    /// Add a new workflow
-    AddWorkflow(AddWorkflowArgs),
-
-    /// Run a stored workflow
-    RunWorkflow(RunWorkflowArgs),
-    
-    /// Remove a stored workflow
-    RemoveWorkflow(RemoveWorkflowArgs),
+    /// Workflow management commands
+    #[command(subcommand)]
+    Flow(FlowCommands),
 
     /// Export commands and workflows to a file
     Export(ExportArgs),
 
     /// Import commands and workflows from a file
     Import(ImportArgs),
+}
+
+#[derive(Subcommand, Debug)]
+pub enum FlowCommands {
+    /// Add a new workflow
+    Add(AddWorkflowArgs),
+
+    /// Run a stored workflow
+    Run(RunWorkflowArgs),
+
+    /// Remove a stored workflow
+    Remove(RemoveWorkflowArgs),
+
+    /// List all stored workflows
+    List(FlowListArgs),
 }
 
 #[derive(Args, Debug)]
@@ -64,6 +74,21 @@ pub struct RunArgs {
 #[derive(Args, Debug)]
 pub struct ListArgs {
     /// Filter commands by tag
+    #[arg(short, long)]
+    pub tag: Option<String>,
+
+    /// List only commands (no workflows)
+    #[arg(long)]
+    pub commands_only: bool,
+
+    /// List only workflows (no commands)
+    #[arg(long)]
+    pub workflows_only: bool,
+}
+
+#[derive(Args, Debug)]
+pub struct FlowListArgs {
+    /// Filter workflows by tag
     #[arg(short, long)]
     pub tag: Option<String>,
 }

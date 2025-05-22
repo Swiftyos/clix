@@ -53,7 +53,11 @@ clix list --tag deployment
 clix remove my-command
 ```
 
-### Adding a workflow
+### Managing workflows with the `flow` command
+
+Workflows can be managed using the `flow` subcommand, which has operations for adding, running, listing, and removing workflows.
+
+#### Adding a workflow
 
 Create a JSON file containing the workflow steps:
 
@@ -90,20 +94,28 @@ The `step_type` field can be either `Command` or `Auth`:
 Then add the workflow:
 
 ```bash
-clix add-workflow my-workflow --description "My workflow" --steps-file workflow.json
+clix flow add my-workflow --description "My workflow" --steps-file workflow.json
 ```
 
-### Running a workflow
+#### Running a workflow
 
 ```bash
-clix run-workflow my-workflow
+clix flow run my-workflow
 ```
 
-### Removing a workflow
+#### Listing workflows
 
 ```bash
-clix remove-workflow my-workflow
+clix flow list
+clix flow list --tag production
 ```
+
+#### Removing a workflow
+
+```bash
+clix flow remove my-workflow
+```
+
 
 #### Authentication Steps in Workflows
 
