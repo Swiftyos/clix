@@ -1,5 +1,5 @@
 use crate::commands::models::{Command, CommandStore, Workflow};
-use crate::error::{ClixError, Result};
+use crate::error::Result;
 use crate::git::GitRepositoryManager;
 use crate::settings::SettingsManager;
 use crate::storage::Storage;
@@ -34,7 +34,7 @@ impl GitIntegratedStorage {
     pub fn sync_with_repositories(&self) -> Result<()> {
         // Pull from all repositories first
         let pull_results = self.git_manager.pull_all_repositories()?;
-        
+
         for (repo_name, result) in pull_results {
             match result {
                 Ok(()) => println!("✓ Synced repository: {}", repo_name),
@@ -44,18 +44,18 @@ impl GitIntegratedStorage {
 
         // Load commands and workflows from all repositories
         self.load_from_repositories()?;
-        
+
         Ok(())
     }
 
     pub fn load_from_repositories(&self) -> Result<()> {
         let repo_paths = self.git_manager.get_all_repo_paths();
         let mut local_store = self.local_storage.load()?;
-        
+
         for repo_path in repo_paths {
             self.load_from_repository(&repo_path, &mut local_store)?;
         }
-        
+
         self.local_storage.save(&local_store)?;
         Ok(())
     }
@@ -66,16 +66,20 @@ impl GitIntegratedStorage {
         if commands_file.exists() {
             let content = fs::read_to_string(&commands_file)?;
             let repo_store: CommandStore = serde_json::from_str(&content)?;
-            
+
             // Merge commands and workflows with local storage
             self.merge_commands(&repo_store.commands, local_store)?;
             self.merge_workflows(&repo_store.workflows, local_store)?;
         }
-        
+
         Ok(())
     }
 
-    fn merge_commands(&self, repo_commands: &std::collections::HashMap<String, Command>, local_store: &mut CommandStore) -> Result<()> {
+    fn merge_commands(
+        &self,
+        repo_commands: &std::collections::HashMap<String, Command>,
+        local_store: &mut CommandStore,
+    ) -> Result<()> {
         for (name, command) in repo_commands {
             if let Some(local_command) = local_store.commands.get(name) {
                 // Compare timestamps to determine if the repo command is newer
@@ -90,7 +94,11 @@ impl GitIntegratedStorage {
         Ok(())
     }
 
-    fn merge_workflows(&self, repo_workflows: &std::collections::HashMap<String, Workflow>, local_store: &mut CommandStore) -> Result<()> {
+    fn merge_workflows(
+        &self,
+        repo_workflows: &std::collections::HashMap<String, Workflow>,
+        local_store: &mut CommandStore,
+    ) -> Result<()> {
         for (name, workflow) in repo_workflows {
             if let Some(local_workflow) = local_store.workflows.get(name) {
                 // Compare timestamps to determine if the repo workflow is newer
@@ -108,14 +116,17 @@ impl GitIntegratedStorage {
     pub fn commit_changes_to_repositories(&self, message: &str) -> Result<()> {
         let settings_manager = SettingsManager::new()?;
         let settings = settings_manager.load()?;
-        let prefixed_message = format!("{} {}", settings.git_settings.commit_message_prefix, message);
-        
+        let prefixed_message = format!(
+            "{} {}",
+            settings.git_settings.commit_message_prefix, message
+        );
+
         let repo_paths = self.git_manager.get_all_repo_paths();
-        
+
         for repo_path in repo_paths {
             self.commit_to_repository(&repo_path, &prefixed_message)?;
         }
-        
+
         Ok(())
     }
 
@@ -132,21 +143,21 @@ impl GitIntegratedStorage {
                 repo.commit_and_push(message, &["commands.json"])?;
             }
         }
-        
+
         Ok(())
     }
 
     // Delegate methods to local storage
     pub fn add_command(&self, command: Command) -> Result<()> {
         let result = self.local_storage.add_command(command);
-        
+
         // If successful, try to commit to repositories
         if result.is_ok() {
             if let Err(e) = self.commit_changes_to_repositories("Add new command via clix") {
                 eprintln!("Warning: Failed to sync to git repositories: {}", e);
             }
         }
-        
+
         result
     }
 
@@ -160,14 +171,16 @@ impl GitIntegratedStorage {
 
     pub fn remove_command(&self, name: &str) -> Result<()> {
         let result = self.local_storage.remove_command(name);
-        
+
         // If successful, try to commit to repositories
         if result.is_ok() {
-            if let Err(e) = self.commit_changes_to_repositories(&format!("Remove command: {}", name)) {
+            if let Err(e) =
+                self.commit_changes_to_repositories(&format!("Remove command: {}", name))
+            {
                 eprintln!("Warning: Failed to sync to git repositories: {}", e);
             }
         }
-        
+
         result
     }
 
@@ -177,14 +190,14 @@ impl GitIntegratedStorage {
 
     pub fn add_workflow(&self, workflow: Workflow) -> Result<()> {
         let result = self.local_storage.add_workflow(workflow);
-        
+
         // If successful, try to commit to repositories
         if result.is_ok() {
             if let Err(e) = self.commit_changes_to_repositories("Add new workflow via clix") {
                 eprintln!("Warning: Failed to sync to git repositories: {}", e);
             }
         }
-        
+
         result
     }
 
@@ -198,14 +211,16 @@ impl GitIntegratedStorage {
 
     pub fn remove_workflow(&self, name: &str) -> Result<()> {
         let result = self.local_storage.remove_workflow(name);
-        
+
         // If successful, try to commit to repositories
         if result.is_ok() {
-            if let Err(e) = self.commit_changes_to_repositories(&format!("Remove workflow: {}", name)) {
+            if let Err(e) =
+                self.commit_changes_to_repositories(&format!("Remove workflow: {}", name))
+            {
                 eprintln!("Warning: Failed to sync to git repositories: {}", e);
             }
         }
-        
+
         result
     }
 
@@ -215,14 +230,16 @@ impl GitIntegratedStorage {
 
     pub fn update_workflow(&self, workflow: &Workflow) -> Result<()> {
         let result = self.local_storage.update_workflow(workflow);
-        
+
         // If successful, try to commit to repositories
         if result.is_ok() {
-            if let Err(e) = self.commit_changes_to_repositories(&format!("Update workflow: {}", workflow.name)) {
+            if let Err(e) =
+                self.commit_changes_to_repositories(&format!("Update workflow: {}", workflow.name))
+            {
                 eprintln!("Warning: Failed to sync to git repositories: {}", e);
             }
         }
-        
+
         result
     }
 }

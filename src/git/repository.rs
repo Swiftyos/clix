@@ -1,6 +1,6 @@
 use crate::error::{ClixError, Result};
 use dirs::home_dir;
-use git2::{BranchType, Repository};
+use git2::Repository;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -23,7 +23,7 @@ impl GitRepository {
         Self { repo_path, config }
     }
 
-    pub fn clone(&self) -> Result<()> {
+    pub fn clone_repo(&self) -> Result<()> {
         if self.repo_path.exists() {
             return Err(ClixError::GitError(format!(
                 "Repository directory '{}' already exists",
@@ -52,36 +52,36 @@ impl GitRepository {
         })?;
 
         // Get the current branch
-        let head = repo.head().map_err(|e| {
-            ClixError::GitError(format!("Failed to get HEAD reference: {}", e))
-        })?;
+        let head = repo
+            .head()
+            .map_err(|e| ClixError::GitError(format!("Failed to get HEAD reference: {}", e)))?;
 
         let branch_name = head
             .shorthand()
             .ok_or_else(|| ClixError::GitError("Failed to get branch name".to_string()))?;
 
         // Fetch from origin
-        let mut remote = repo.find_remote("origin").map_err(|e| {
-            ClixError::GitError(format!("Failed to find remote 'origin': {}", e))
-        })?;
+        let mut remote = repo
+            .find_remote("origin")
+            .map_err(|e| ClixError::GitError(format!("Failed to find remote 'origin': {}", e)))?;
 
         remote
             .fetch(&[branch_name], None, None)
             .map_err(|e| ClixError::GitError(format!("Failed to fetch from origin: {}", e)))?;
 
         // Get the updated reference
-        let fetch_head = repo.find_reference("FETCH_HEAD").map_err(|e| {
-            ClixError::GitError(format!("Failed to find FETCH_HEAD: {}", e))
-        })?;
+        let fetch_head = repo
+            .find_reference("FETCH_HEAD")
+            .map_err(|e| ClixError::GitError(format!("Failed to find FETCH_HEAD: {}", e)))?;
 
-        let fetch_commit = repo.reference_to_annotated_commit(&fetch_head).map_err(|e| {
-            ClixError::GitError(format!("Failed to get fetch commit: {}", e))
-        })?;
+        let fetch_commit = repo
+            .reference_to_annotated_commit(&fetch_head)
+            .map_err(|e| ClixError::GitError(format!("Failed to get fetch commit: {}", e)))?;
 
         // Perform merge analysis
-        let analysis = repo.merge_analysis(&[&fetch_commit]).map_err(|e| {
-            ClixError::GitError(format!("Failed to analyze merge: {}", e))
-        })?;
+        let analysis = repo
+            .merge_analysis(&[&fetch_commit])
+            .map_err(|e| ClixError::GitError(format!("Failed to analyze merge: {}", e)))?;
 
         if analysis.0.is_fast_forward() {
             // Fast-forward merge
@@ -95,9 +95,8 @@ impl GitRepository {
                 .map_err(|e| ClixError::GitError(format!("Failed to fast-forward: {}", e)))?;
 
             // Update working directory
-            repo.set_head(&refname).map_err(|e| {
-                ClixError::GitError(format!("Failed to set HEAD: {}", e))
-            })?;
+            repo.set_head(&refname)
+                .map_err(|e| ClixError::GitError(format!("Failed to set HEAD: {}", e)))?;
 
             repo.checkout_head(Some(git2::build::CheckoutBuilder::default().force()))
                 .map_err(|e| ClixError::GitError(format!("Failed to checkout HEAD: {}", e)))?;
@@ -129,12 +128,12 @@ impl GitRepository {
         let branch_name = format!("clix-update-{}", timestamp);
 
         // Get the current HEAD commit
-        let head = repo.head().map_err(|e| {
-            ClixError::GitError(format!("Failed to get HEAD reference: {}", e))
-        })?;
-        let head_commit = head.peel_to_commit().map_err(|e| {
-            ClixError::GitError(format!("Failed to get HEAD commit: {}", e))
-        })?;
+        let head = repo
+            .head()
+            .map_err(|e| ClixError::GitError(format!("Failed to get HEAD reference: {}", e)))?;
+        let head_commit = head
+            .peel_to_commit()
+            .map_err(|e| ClixError::GitError(format!("Failed to get HEAD commit: {}", e)))?;
 
         // Create new branch
         repo.branch(&branch_name, &head_commit, false)
@@ -146,9 +145,9 @@ impl GitRepository {
             .map_err(|e| ClixError::GitError(format!("Failed to switch to branch: {}", e)))?;
 
         // Add files to index
-        let mut index = repo.index().map_err(|e| {
-            ClixError::GitError(format!("Failed to get repository index: {}", e))
-        })?;
+        let mut index = repo
+            .index()
+            .map_err(|e| ClixError::GitError(format!("Failed to get repository index: {}", e)))?;
 
         for file in files {
             let file_path = Path::new(file);
@@ -157,21 +156,20 @@ impl GitRepository {
             })?;
         }
 
-        index.write().map_err(|e| {
-            ClixError::GitError(format!("Failed to write index: {}", e))
-        })?;
+        index
+            .write()
+            .map_err(|e| ClixError::GitError(format!("Failed to write index: {}", e)))?;
 
         // Create commit
-        let tree_id = index.write_tree().map_err(|e| {
-            ClixError::GitError(format!("Failed to write tree: {}", e))
-        })?;
-        let tree = repo.find_tree(tree_id).map_err(|e| {
-            ClixError::GitError(format!("Failed to find tree: {}", e))
-        })?;
+        let tree_id = index
+            .write_tree()
+            .map_err(|e| ClixError::GitError(format!("Failed to write tree: {}", e)))?;
+        let tree = repo
+            .find_tree(tree_id)
+            .map_err(|e| ClixError::GitError(format!("Failed to find tree: {}", e)))?;
 
-        let signature = git2::Signature::now("Clix", "clix@example.com").map_err(|e| {
-            ClixError::GitError(format!("Failed to create signature: {}", e))
-        })?;
+        let signature = git2::Signature::now("Clix", "clix@example.com")
+            .map_err(|e| ClixError::GitError(format!("Failed to create signature: {}", e)))?;
 
         repo.commit(
             Some("HEAD"),
@@ -184,9 +182,9 @@ impl GitRepository {
         .map_err(|e| ClixError::GitError(format!("Failed to create commit: {}", e)))?;
 
         // Push the branch
-        let mut remote = repo.find_remote("origin").map_err(|e| {
-            ClixError::GitError(format!("Failed to find remote 'origin': {}", e))
-        })?;
+        let mut remote = repo
+            .find_remote("origin")
+            .map_err(|e| ClixError::GitError(format!("Failed to find remote 'origin': {}", e)))?;
 
         let push_spec = format!("refs/heads/{}:refs/heads/{}", branch_name, branch_name);
         remote
@@ -249,7 +247,7 @@ impl GitRepositoryManager {
         };
 
         let repo = GitRepository::new(config.clone(), &self.repos_dir);
-        repo.clone()?;
+        repo.clone_repo()?;
 
         self.configs.push(config);
         self.save_configs()?;
@@ -318,7 +316,7 @@ impl GitRepositoryManager {
         self.configs
             .iter()
             .filter(|c| c.enabled)
-            .map(|config| {
+            .filter_map(|config| {
                 let repo = GitRepository::new(config.clone(), &self.repos_dir);
                 if repo.is_cloned() {
                     Some(repo.get_repo_path().to_path_buf())
@@ -326,7 +324,6 @@ impl GitRepositoryManager {
                     None
                 }
             })
-            .filter_map(|path| path)
             .collect()
     }
 
