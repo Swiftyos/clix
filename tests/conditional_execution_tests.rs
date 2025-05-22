@@ -8,7 +8,6 @@ use test_context::{AsyncTestContext, test_context};
 
 struct ConditionalExecutionContext {
     temp_dir: PathBuf,
-    storage: Storage,
     examples_dir: PathBuf,
 }
 
@@ -31,16 +30,12 @@ impl AsyncTestContext for ConditionalExecutionContext {
                 env::set_var("HOME", &temp_dir);
             }
 
-            // Create the storage instance that will use our test directory
-            let storage = Storage::new().unwrap();
-
             // Get the path to the examples directory (relative to project root)
             let project_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
             let examples_dir = project_dir.join("examples");
 
             ConditionalExecutionContext {
                 temp_dir,
-                storage,
                 examples_dir,
             }
         })
@@ -57,8 +52,16 @@ impl AsyncTestContext for ConditionalExecutionContext {
 #[test_context(ConditionalExecutionContext)]
 #[tokio::test]
 async fn test_time_workflow_execution(ctx: &mut ConditionalExecutionContext) {
-    // Create import manager
-    let import_manager = ImportManager::new(ctx.storage.clone());
+    // Create a completely fresh storage directory for this test to ensure isolation
+    let test_storage_dir = ctx.temp_dir.join("time_test_storage");
+    fs::create_dir_all(&test_storage_dir).unwrap();
+    unsafe {
+        env::set_var("HOME", &test_storage_dir);
+    }
+    let fresh_storage = Storage::new().unwrap();
+
+    // Create import manager with fresh storage
+    let import_manager = ImportManager::new(fresh_storage.clone());
 
     // Path to the time workflow example
     let example_path = ctx.examples_dir.join("time_workflow.json");
@@ -74,12 +77,12 @@ async fn test_time_workflow_execution(ctx: &mut ConditionalExecutionContext) {
     assert_eq!(summary.commands_added, 0);
 
     // Verify workflow was imported
-    let workflows = ctx.storage.list_workflows().unwrap();
+    let workflows = fresh_storage.list_workflows().unwrap();
     assert_eq!(workflows.len(), 1);
     assert!(workflows.iter().any(|w| w.name == "time-check"));
 
     // Get the workflow
-    let workflow = ctx.storage.get_workflow("time-check").unwrap();
+    let workflow = fresh_storage.get_workflow("time-check").unwrap();
 
     // Execute the workflow
     let results = CommandExecutor::execute_workflow(&workflow, None, None).unwrap();
@@ -116,8 +119,16 @@ async fn test_time_workflow_execution(ctx: &mut ConditionalExecutionContext) {
 #[test_context(ConditionalExecutionContext)]
 #[tokio::test]
 async fn test_gke_workflow_execution(ctx: &mut ConditionalExecutionContext) {
-    // Create import manager
-    let import_manager = ImportManager::new(ctx.storage.clone());
+    // Create a completely fresh storage directory for this test to ensure isolation
+    let test_storage_dir = ctx.temp_dir.join("gke_test_storage");
+    fs::create_dir_all(&test_storage_dir).unwrap();
+    unsafe {
+        env::set_var("HOME", &test_storage_dir);
+    }
+    let fresh_storage = Storage::new().unwrap();
+
+    // Create import manager with fresh storage
+    let import_manager = ImportManager::new(fresh_storage.clone());
 
     // Path to the GKE workflow example
     let example_path = ctx.examples_dir.join("gke_workflow.json");
@@ -133,12 +144,18 @@ async fn test_gke_workflow_execution(ctx: &mut ConditionalExecutionContext) {
     assert_eq!(summary.commands_added, 0);
 
     // Verify workflow was imported
-    let workflows = ctx.storage.list_workflows().unwrap();
+    let workflows = fresh_storage.list_workflows().unwrap();
+    
+    // Debug: Print workflow names if assertion fails
+    if workflows.len() != 1 {
+        eprintln!("Expected 1 workflow, found {}: {:?}", workflows.len(), workflows.iter().map(|w| &w.name).collect::<Vec<_>>());
+    }
+    
     assert_eq!(workflows.len(), 1);
     assert!(workflows.iter().any(|w| w.name == "gke"));
 
     // Get the workflow
-    let workflow = ctx.storage.get_workflow("gke").unwrap();
+    let workflow = fresh_storage.get_workflow("gke").unwrap();
 
     // Set variables for dev environment
     let mut vars = std::collections::HashMap::new();
