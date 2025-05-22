@@ -13,16 +13,24 @@ struct StorageContext {
 impl AsyncTestContext for StorageContext {
     fn setup<'a>() -> std::pin::Pin<Box<dyn std::future::Future<Output = Self> + Send + 'a>> {
         Box::pin(async {
-            // Create a temporary directory for tests
-            let temp_dir = std::env::temp_dir().join("clix_test").join(format!(
-                "test_{}",
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_micros()
-            ));
+            // Create a unique temporary directory for tests
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_micros();
 
+            let temp_dir = std::env::temp_dir()
+                .join("clix_test")
+                .join(format!("test_{}", timestamp));
             fs::create_dir_all(&temp_dir).unwrap();
+
+            // Ensure .clix directory exists
+            let clix_dir = temp_dir.join(".clix");
+            fs::create_dir_all(&clix_dir).unwrap();
+
+            // Create an empty commands.json file
+            let commands_file = clix_dir.join("commands.json");
+            fs::write(&commands_file, r#"{"commands":{},"workflows":{}}"#).unwrap();
 
             // Temporarily set HOME environment variable to our test directory
             unsafe {
@@ -90,12 +98,12 @@ async fn test_command_storage(ctx: &mut StorageContext) {
 #[tokio::test]
 async fn test_workflow_storage(ctx: &mut StorageContext) {
     // Create a test workflow
-    let steps = vec![WorkflowStep {
-        name: "Step 1".to_string(),
-        command: "echo 'Step 1'".to_string(),
-        description: "First step".to_string(),
-        continue_on_error: false,
-    }];
+    let steps = vec![WorkflowStep::new_command(
+        "Step 1".to_string(),
+        "echo 'Step 1'".to_string(),
+        "First step".to_string(),
+        false,
+    )];
 
     let workflow = Workflow::new(
         "test-workflow".to_string(),
@@ -126,4 +134,15 @@ async fn test_workflow_storage(ctx: &mut StorageContext) {
     // List workflows
     let workflows = ctx.storage.list_workflows().unwrap();
     assert_eq!(workflows.len(), 1);
+
+    // Remove workflow
+    ctx.storage.remove_workflow(&workflow.name).unwrap();
+
+    // List should be empty now
+    let workflows = ctx.storage.list_workflows().unwrap();
+    assert_eq!(workflows.len(), 0);
+
+    // Trying to remove a non-existent workflow should fail
+    let remove_result = ctx.storage.remove_workflow(&workflow.name);
+    assert!(remove_result.is_err());
 }

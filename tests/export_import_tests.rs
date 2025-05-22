@@ -63,12 +63,12 @@ async fn test_export_import(ctx: &mut ExportImportContext) {
         vec!["test".to_string()],
     );
 
-    let steps = vec![WorkflowStep {
-        name: "Step 1".to_string(),
-        command: "echo 'Step 1'".to_string(),
-        description: "First step".to_string(),
-        continue_on_error: false,
-    }];
+    let steps = vec![WorkflowStep::new_command(
+        "Step 1".to_string(),
+        "echo 'Step 1'".to_string(),
+        "First step".to_string(),
+        false,
+    )];
 
     let workflow = Workflow::new(
         "test-workflow".to_string(),

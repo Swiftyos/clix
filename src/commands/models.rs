@@ -53,12 +53,46 @@ pub struct Workflow {
     pub tags: Vec<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum StepType {
+    Command,
+    Auth,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct WorkflowStep {
     pub name: String,
     pub command: String,
     pub description: String,
     pub continue_on_error: bool,
+    pub step_type: StepType,
+}
+
+impl WorkflowStep {
+    pub fn new_command(
+        name: String,
+        command: String,
+        description: String,
+        continue_on_error: bool,
+    ) -> Self {
+        WorkflowStep {
+            name,
+            command,
+            description,
+            continue_on_error,
+            step_type: StepType::Command,
+        }
+    }
+
+    pub fn new_auth(name: String, command: String, description: String) -> Self {
+        WorkflowStep {
+            name,
+            command,
+            description,
+            continue_on_error: false, // Auth steps should not continue on error
+            step_type: StepType::Auth,
+        }
+    }
 }
 
 impl Workflow {

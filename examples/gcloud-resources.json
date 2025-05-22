@@ -1,0 +1,70 @@
+{
+  "version": "0.1.0",
+  "metadata": {
+    "exported_at": 1684756234,
+    "exported_by": "developer1",
+    "description": "Example GCP resources workflow with parameter"
+  },
+  "commands": {},
+  "workflows": {
+    "gcloud-resources": {
+      "name": "gcloud-resources",
+      "description": "Authenticate with Google Cloud and list resources for a specific project",
+      "steps": [
+        {
+          "name": "Authenticate with Google Cloud",
+          "command": "gcloud auth login",
+          "description": "Login to Google Cloud using your credentials",
+          "continue_on_error": false,
+          "step_type": "Auth"
+        },
+        {
+          "name": "Configure GCP project",
+          "command": "gcloud config set project ${PROJECT_ID}",
+          "description": "Set the current GCP project to the provided project ID",
+          "continue_on_error": false,
+          "step_type": "Command"
+        },
+        {
+          "name": "List Compute Engine instances",
+          "command": "gcloud compute instances list",
+          "description": "Display all Compute Engine instances in the project",
+          "continue_on_error": true,
+          "step_type": "Command"
+        },
+        {
+          "name": "List Cloud Storage buckets",
+          "command": "gcloud storage ls",
+          "description": "List all Cloud Storage buckets in the project",
+          "continue_on_error": true,
+          "step_type": "Command"
+        },
+        {
+          "name": "List Cloud SQL instances",
+          "command": "gcloud sql instances list",
+          "description": "Display all Cloud SQL instances in the project",
+          "continue_on_error": true,
+          "step_type": "Command"
+        },
+        {
+          "name": "List Kubernetes clusters",
+          "command": "gcloud container clusters list",
+          "description": "Display all GKE clusters in the project",
+          "continue_on_error": true,
+          "step_type": "Command"
+        },
+        {
+          "name": "List Cloud Run services",
+          "command": "gcloud run services list",
+          "description": "Display all Cloud Run services in the project",
+          "continue_on_error": true,
+          "step_type": "Command"
+        }
+      ],
+      "created_at": 1684756000,
+      "last_used": null,
+      "use_count": 0,
+      "tags": ["gcp", "resources", "auth-example", "parameter-example"]
+    }
+  }
+}
