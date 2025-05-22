@@ -64,10 +64,7 @@ impl ExportManager {
             let mut filtered_commands = store.commands;
 
             if let Some(tag) = &tag_filter {
-                filtered_commands = filtered_commands
-                    .into_iter()
-                    .filter(|(_, cmd)| cmd.tags.contains(tag))
-                    .collect();
+                filtered_commands.retain(|_, cmd| cmd.tags.contains(tag));
             }
 
             Some(filtered_commands)
@@ -80,10 +77,7 @@ impl ExportManager {
             let mut filtered_workflows = store.workflows;
 
             if let Some(tag) = &tag_filter {
-                filtered_workflows = filtered_workflows
-                    .into_iter()
-                    .filter(|(_, wf)| wf.tags.contains(tag))
-                    .collect();
+                filtered_workflows.retain(|_, wf| wf.tags.contains(tag));
             }
 
             Some(filtered_workflows)
