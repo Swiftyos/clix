@@ -32,9 +32,7 @@ impl AsyncTestContext for E2ETestContext {
             fs::create_dir_all(&temp_dir).unwrap();
 
             // Temporarily set HOME environment variable to our test directory
-            unsafe {
-                env::set_var("HOME", &temp_dir);
-            }
+            env::set_var("HOME", &temp_dir);
 
             // Create the storage instance that will use our test directory
             let storage = Storage::new().unwrap();
@@ -79,9 +77,9 @@ async fn test_basic_command_operations(ctx: &mut E2ETestContext) {
     let commands = ctx.storage.list_commands().unwrap();
     assert_eq!(commands.len(), 2);
     
-    let cmd_names: Vec<&String> = commands.iter().map(|c| &c.name).collect();
-    assert!(cmd_names.contains(&&"test-echo".to_string()));
-    assert!(cmd_names.contains(&&"test-date".to_string()));
+    let cmd_names: Vec<&str> = commands.iter().map(|c| c.name.as_str()).collect();
+    assert!(cmd_names.contains(&"test-echo"));
+    assert!(cmd_names.contains(&"test-date"));
 
     // Test getting specific command
     let retrieved_cmd = ctx.storage.get_command("test-echo").unwrap();
@@ -589,9 +587,7 @@ async fn test_export_import_e2e(ctx: &mut E2ETestContext) {
     let import_temp_dir = ctx.temp_dir.join("import_test");
     fs::create_dir_all(&import_temp_dir).unwrap();
     
-    unsafe {
-        env::set_var("HOME", &import_temp_dir);
-    }
+    env::set_var("HOME", &import_temp_dir);
     
     let import_storage = Storage::new().unwrap();
     let import_manager = ImportManager::new(import_storage.clone());
@@ -772,7 +768,8 @@ async fn test_comprehensive_integration(ctx: &mut E2ETestContext) {
                 "Validate Environment".to_string(),
                 "Check if environment is valid".to_string(),
                 Condition {
-                    expression: "[ \"$ENV\" = \"dev\" -o \"$ENV\" = \"staging\" -o \"$ENV\" = \"prod\" ]".to_string(),
+                    expression: "[ \"$ENV\" = \"dev\" -o \"$ENV\" = \"staging\" -o \"$ENV\" = \"prod\" ]"
+                        .to_string(),
                     variable: None,
                 },
                 vec![WorkflowStep::new_command(
