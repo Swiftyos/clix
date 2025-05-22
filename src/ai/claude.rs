@@ -185,15 +185,32 @@ struct ContentBlock {
     text: String,
 }
 
-// Models list response
+// Models list response - Claude API uses "data" field, not "models"
 #[derive(Debug, Deserialize)]
 struct ModelsResponse {
-    models: Vec<ModelInfo>,
+    data: Vec<ModelInfo>,
+}
+
+// Alternative structure for backward compatibility
+#[derive(Debug, Deserialize)]
+struct LegacyModelsResponse {
+    models: Vec<LegacyModelInfo>,
 }
 
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
 struct ModelInfo {
+    id: String,
+    #[serde(default)]
+    display_name: Option<String>,
+    #[serde(default)]
+    max_tokens: Option<u32>,
+}
+
+// Legacy model info for backward compatibility
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)]
+struct LegacyModelInfo {
     name: String,
     description: String,
     max_tokens: u32,
@@ -696,19 +713,83 @@ Follow these guidelines:
                 ClixError::CommandExecutionFailed(format!("Failed to call Claude API: {}", e))
             })?;
 
-        // Parse response
-        let models_response: ModelsResponse = response.json().map_err(|e| {
-            ClixError::CommandExecutionFailed(format!("Failed to parse Claude API response: {}", e))
+        // Get the raw response body first for debugging
+        let raw_response = response.text().map_err(|e| {
+            ClixError::CommandExecutionFailed(format!("Failed to get raw response body: {}", e))
         })?;
 
-        // Extract model names
-        let model_names = models_response
-            .models
-            .into_iter()
-            .map(|model| model.name)
-            .collect();
+        // Print the raw response for debugging (this matches the pattern used in ask_internal)
+        println!("Raw models API response: {}", raw_response);
 
-        Ok(model_names)
+        // Try to parse as ModelsResponse first (Claude API format with "data" field)
+        if let Ok(models_response) = serde_json::from_str::<ModelsResponse>(&raw_response) {
+            let model_names = models_response
+                .data
+                .into_iter()
+                .map(|model| model.id)
+                .collect();
+            return Ok(model_names);
+        }
+
+        // Try to parse as legacy ModelsResponse (with "models" field)
+        if let Ok(models_response) = serde_json::from_str::<LegacyModelsResponse>(&raw_response) {
+            let model_names = models_response
+                .models
+                .into_iter()
+                .map(|model| model.name)
+                .collect();
+            return Ok(model_names);
+        }
+
+        // If that fails, try to parse as a direct array of models
+        if let Ok(models) = serde_json::from_str::<Vec<ModelInfo>>(&raw_response) {
+            let model_names = models
+                .into_iter()
+                .map(|model| model.id)
+                .collect();
+            return Ok(model_names);
+        }
+
+        // If both fail, try to parse as a generic JSON value to understand the structure
+        match serde_json::from_str::<serde_json::Value>(&raw_response) {
+            Ok(json_value) => {
+                // Check if it's an object with a different field name for models
+                if let Some(obj) = json_value.as_object() {
+                    // Look for common field names that might contain model data
+                    for (key, value) in obj {
+                        if key.contains("model") || key == "data" {
+                            if let Some(array) = value.as_array() {
+                                let mut model_names = Vec::new();
+                                for item in array {
+                                    if let Some(name) = item.get("id").and_then(|v| v.as_str()) {
+                                        model_names.push(name.to_string());
+                                    } else if let Some(name) = item.get("name").and_then(|v| v.as_str()) {
+                                        model_names.push(name.to_string());
+                                    } else if let Some(name) = item.as_str() {
+                                        model_names.push(name.to_string());
+                                    }
+                                }
+                                if !model_names.is_empty() {
+                                    return Ok(model_names);
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                Err(ClixError::CommandExecutionFailed(format!(
+                    "Unexpected API response structure. Available fields: {:?}",
+                    json_value.as_object().map(|obj| obj.keys().collect::<Vec<_>>()).unwrap_or_default()
+                )))
+            }
+            Err(parse_err) => {
+                Err(ClixError::CommandExecutionFailed(format!(
+                    "Failed to parse Claude API response: {}. Raw response: {}",
+                    parse_err,
+                    raw_response
+                )))
+            }
+        }
     }
 
     pub fn confirm_action(&self, action: &ClaudeAction) -> Result<bool> {

@@ -58,4 +58,15 @@ impl MockClaudeAssistant {
             ),
         }
     }
+
+    pub fn mock_list_models() -> Result<Vec<String>, crate::error::ClixError> {
+        // Return a realistic set of Claude models for testing
+        Ok(vec![
+            "claude-3-opus-20240229".to_string(),
+            "claude-3-sonnet-20240229".to_string(),
+            "claude-3-haiku-20240307".to_string(),
+            "claude-2.1".to_string(),
+            "claude-2.0".to_string(),
+        ])
+    }
 }
