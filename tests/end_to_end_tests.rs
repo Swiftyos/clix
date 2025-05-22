@@ -32,7 +32,9 @@ impl AsyncTestContext for E2ETestContext {
             fs::create_dir_all(&temp_dir).unwrap();
 
             // Temporarily set HOME environment variable to our test directory
-            env::set_var("HOME", &temp_dir);
+            unsafe {
+                env::set_var("HOME", &temp_dir);
+            }
 
             // Create the storage instance that will use our test directory
             let storage = Storage::new().unwrap();
@@ -587,7 +589,9 @@ async fn test_export_import_e2e(ctx: &mut E2ETestContext) {
     let import_temp_dir = ctx.temp_dir.join("import_test");
     fs::create_dir_all(&import_temp_dir).unwrap();
     
-    env::set_var("HOME", &import_temp_dir);
+    unsafe {
+        env::set_var("HOME", &import_temp_dir);
+    }
     
     let import_storage = Storage::new().unwrap();
     let import_manager = ImportManager::new(import_storage.clone());
