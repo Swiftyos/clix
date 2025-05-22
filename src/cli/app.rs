@@ -26,6 +26,9 @@ pub enum Commands {
 
     /// Run a stored workflow
     RunWorkflow(RunWorkflowArgs),
+    
+    /// Remove a stored workflow
+    RemoveWorkflow(RemoveWorkflowArgs),
 
     /// Export commands and workflows to a file
     Export(ExportArgs),
@@ -92,6 +95,12 @@ pub struct AddWorkflowArgs {
 #[derive(Args, Debug)]
 pub struct RunWorkflowArgs {
     /// Name of the workflow to run
+    pub name: String,
+}
+
+#[derive(Args, Debug)]
+pub struct RemoveWorkflowArgs {
+    /// Name of the workflow to remove
     pub name: String,
 }
 

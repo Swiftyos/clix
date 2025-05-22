@@ -142,6 +142,15 @@ fn run() -> Result<()> {
                 remove_args.name
             );
         }
+        
+        Commands::RemoveWorkflow(remove_args) => {
+            storage.remove_workflow(&remove_args.name)?;
+            println!(
+                "{} Workflow '{}' removed successfully",
+                "Success:".green().bold(),
+                remove_args.name
+            );
+        }
 
         Commands::AddWorkflow(add_args) => {
             let tags = add_args.tags.unwrap_or_else(Vec::new);

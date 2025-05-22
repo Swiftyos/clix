@@ -99,6 +99,12 @@ clix add-workflow my-workflow --description "My workflow" --steps-file workflow.
 clix run-workflow my-workflow
 ```
 
+### Removing a workflow
+
+```bash
+clix remove-workflow my-workflow
+```
+
 #### Authentication Steps in Workflows
 
 Workflows can include authentication steps that require user interaction. For example, when running `gcloud auth login`, the user needs to follow a browser-based authentication flow. The workflow will pause after executing the auth command and wait for the user to press Enter before continuing:
