@@ -1,6 +1,8 @@
 use crate::commands::models::{Command, StepType, Workflow, WorkflowStep};
+use crate::commands::variables::{VariableProcessor, WorkflowContext};
 use crate::error::{ClixError, Result};
 use colored::Colorize;
+use std::collections::HashMap;
 use std::io::{self, BufRead, Write};
 use std::process::{Command as ProcessCommand, Output};
 
@@ -31,9 +33,38 @@ impl CommandExecutor {
         }
     }
 
-    pub fn execute_workflow(workflow: &Workflow) -> Result<Vec<(String, Result<Output>)>> {
+    pub fn execute_workflow(
+        workflow: &Workflow,
+        profile_name: Option<&str>,
+        provided_vars: Option<HashMap<String, String>>,
+    ) -> Result<Vec<(String, Result<Output>)>> {
         println!("{} {}", "Executing workflow:".blue().bold(), workflow.name);
         println!("{} {}", "Description:".blue().bold(), workflow.description);
+
+        // Create workflow context with variables
+        let mut context = WorkflowContext::new();
+
+        // Apply profile variables if a profile was specified
+        if let Some(profile_name) = profile_name {
+            if let Some(profile) = workflow.get_profile(profile_name) {
+                println!("{} {}", "Using profile:".blue().bold(), profile.name);
+                context.merge_variables(profile.variables.clone());
+            } else {
+                println!(
+                    "{} Profile '{}' not found",
+                    "Warning:".yellow().bold(),
+                    profile_name
+                );
+            }
+        }
+
+        // Apply provided variables (override profile values)
+        if let Some(vars) = provided_vars {
+            context.merge_variables(vars);
+        }
+
+        // Ask for any missing required variables
+        VariableProcessor::prompt_for_variables(workflow, &mut context)?;
 
         let mut results = Vec::new();
 
@@ -47,9 +78,12 @@ impl CommandExecutor {
             println!("{} {}", "Description:".blue().bold(), step.description);
             println!("{} {}", "Command:".blue().bold(), step.command);
 
-            let result = match step.step_type {
-                StepType::Command => Self::execute_command_step(step),
-                StepType::Auth => Self::execute_auth_step(step),
+            // Process variables in the step
+            let processed_step = VariableProcessor::process_step(step, &context);
+
+            let result = match processed_step.step_type {
+                StepType::Command => Self::execute_command_step(&processed_step),
+                StepType::Auth => Self::execute_auth_step(&processed_step),
             };
 
             // Check if we need to continue before moving the result

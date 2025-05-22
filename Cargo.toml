@@ -13,6 +13,7 @@ dirs = "5.0"
 colored = "2.0"
 thiserror = "1.0"
 tracing = "0.1"
+regex = "1.11"
 
 [dev-dependencies]
 temp-dir = "0.1"

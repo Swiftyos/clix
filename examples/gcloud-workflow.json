@@ -1,0 +1,30 @@
+[
+  {
+    "name": "Set GCloud Project",
+    "command": "gcloud config set project {{ project_name }}",
+    "description": "Set the active GCloud project",
+    "continue_on_error": false,
+    "step_type": "Command"
+  },
+  {
+    "name": "Get Cluster Credentials",
+    "command": "gcloud container clusters get-credentials {{ cluster_name }} --zone={{ zone }}",
+    "description": "Fetch credentials for the specified GKE cluster",
+    "continue_on_error": false,
+    "step_type": "Command"
+  },
+  {
+    "name": "Set Kubernetes Namespace",
+    "command": "kubectl config set-context --current --namespace={{ namespace }}",
+    "description": "Set the default namespace for kubectl commands",
+    "continue_on_error": false,
+    "step_type": "Command"
+  },
+  {
+    "name": "List Pods",
+    "command": "kubectl get pods -n {{ namespace }}",
+    "description": "List all pods in the specified namespace",
+    "continue_on_error": true,
+    "step_type": "Command"
+  }
+]
