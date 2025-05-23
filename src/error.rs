@@ -40,6 +40,9 @@ pub enum ClixError {
 
     #[error("Not found: {0}")]
     NotFound(String),
+
+    #[error("Git error: {0}")]
+    GitError(String),
 }
 
 impl ClixError {
@@ -95,6 +98,9 @@ impl ClixError {
             }
             ClixError::NotFound(msg) => {
                 format!("Not found: {}\n💡 Check if the item exists or create it first.", msg)
+            }
+            ClixError::GitError(msg) => {
+                format!("Git error: {}\n💡 Check repository status and your git configuration.", msg)
             }
         }
     }

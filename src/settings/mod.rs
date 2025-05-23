@@ -97,7 +97,7 @@ impl SettingsManager {
     }
 
     pub fn update_ai_temperature(&self, temperature: f32) -> Result<()> {
-        if temperature < 0.0 || temperature > 1.0 {
+        if !(0.0..=1.0).contains(&temperature) {
             return Err(ClixError::ValidationError(format!(
                 "Temperature must be between 0.0 and 1.0, got: {}",
                 temperature
