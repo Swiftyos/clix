@@ -1,0 +1,44 @@
+name: Format on Comment
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  format:
+    if: github.event.issue.pull_request && contains(github.event.comment.body, '@cargo format')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: xt0rted/pull-request-comment-branch@v3
+        id: comment-branch
+      
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.comment-branch.outputs.head_ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0            # keep history so the commit can be added
+          persist-credentials: false 
+      
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      
+      - name: Run formatting
+        run: |
+          cargo fmt
+          cargo clippy --fix --allow-dirty --allow-staged
+      
+      - name: Commit files
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git commit -a -m "fmt and clippy fixes"
+      
+      - name: Push changes
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ steps.comment-branch.outputs.head_ref }}

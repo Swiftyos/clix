@@ -11,6 +11,26 @@ cd clix
 cargo install --path .
 ```
 
+## Git Repository Integration (Team Sharing)
+
+### Quick start for team sharing
+
+```bash
+# Add your team's shared command repository
+clix git add-repo team-commands --url https://github.com/your-team/shared-commands.git
+
+# Check repository status
+clix git status
+
+# List all configured repositories
+clix git list-repos
+
+# Manually pull latest changes
+clix git pull
+```
+
+Note: Clix automatically syncs with all configured repositories when you run any command.
+
 ## Basic Commands
 
 ### Adding a command

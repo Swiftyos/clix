@@ -40,6 +40,10 @@ pub enum Commands {
 
     /// Generate shell completions
     Completions(CompletionsArgs),
+
+    /// Git repository management commands
+    #[command(subcommand)]
+    Git(GitCommands),
 }
 
 #[derive(Subcommand, Debug)]
@@ -391,4 +395,38 @@ pub enum Shell {
     Fish,
     PowerShell,
     Elvish,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum GitCommands {
+    /// Add a git repository for sharing commands
+    AddRepo(AddRepoArgs),
+
+    /// Remove a git repository
+    RemoveRepo(RemoveRepoArgs),
+
+    /// List all configured git repositories
+    ListRepos,
+
+    /// Pull latest changes from all repositories
+    Pull,
+
+    /// Sync (pull) and show status of all repositories
+    Status,
+}
+
+#[derive(Args, Debug)]
+pub struct AddRepoArgs {
+    /// Name for the repository (used as local directory name)
+    pub name: String,
+
+    /// Git repository URL
+    #[arg(short, long)]
+    pub url: String,
+}
+
+#[derive(Args, Debug)]
+pub struct RemoveRepoArgs {
+    /// Name of the repository to remove
+    pub name: String,
 }
