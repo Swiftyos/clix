@@ -727,7 +727,8 @@ fn run() -> Result<()> {
 
         Commands::Git(git_command) => match git_command {
             GitCommands::AddRepo(add_repo_args) => {
-                storage.get_git_manager()
+                storage
+                    .get_git_manager()
                     .add_repository(add_repo_args.name.clone(), add_repo_args.url.clone())?;
 
                 println!(
@@ -741,7 +742,9 @@ fn run() -> Result<()> {
             }
 
             GitCommands::RemoveRepo(remove_repo_args) => {
-                storage.get_git_manager().remove_repository(&remove_repo_args.name)?;
+                storage
+                    .get_git_manager()
+                    .remove_repository(&remove_repo_args.name)?;
 
                 println!(
                     "{} Repository '{}' removed successfully",
@@ -751,7 +754,8 @@ fn run() -> Result<()> {
             }
 
             GitCommands::ListRepos => {
-                let repos = storage.get_git_manager().list_repositories();
+                let git_manager = storage.get_git_manager();
+                let repos = git_manager.list_repositories();
 
                 if repos.is_empty() {
                     println!("No git repositories configured yet.");
@@ -772,7 +776,7 @@ fn run() -> Result<()> {
                     );
 
                     // Check if repository is cloned
-                    if let Some(git_repo) = storage.get_git_manager().get_repository(&repo.name) {
+                    if let Some(git_repo) = git_manager.get_repository(&repo.name) {
                         if git_repo.is_cloned() {
                             println!("{}: ✓ Cloned", "Status".green());
                             println!("{}: {}", "Path".green(), git_repo.get_repo_path().display());
@@ -788,7 +792,8 @@ fn run() -> Result<()> {
             GitCommands::Pull => {
                 println!("{} Pulling from all repositories...", "Info:".blue().bold());
 
-                let results = storage.get_git_manager().pull_all_repositories()?;
+                let git_manager = storage.get_git_manager();
+                let results = git_manager.pull_all_repositories()?;
 
                 println!("\n{}", "Pull Results:".blue().bold());
                 println!("{}", "=".repeat(50));
@@ -812,16 +817,17 @@ fn run() -> Result<()> {
                 println!("{} Checking repository status...", "Info:".blue().bold());
 
                 // Pull first
-                let pull_results = storage.get_git_manager().pull_all_repositories()?;
+                let git_manager = storage.get_git_manager();
+                let pull_results = git_manager.pull_all_repositories()?;
 
                 println!("\n{}", "Repository Status:".blue().bold());
                 println!("{}", "=".repeat(50));
 
-                let repos = storage.get_git_manager().list_repositories();
+                let repos = git_manager.list_repositories();
                 for repo in repos {
                     println!("{}: {}", "Repository".green().bold(), repo.name);
 
-                    if let Some(git_repo) = storage.get_git_manager().get_repository(&repo.name) {
+                    if let Some(git_repo) = git_manager.get_repository(&repo.name) {
                         if git_repo.is_cloned() {
                             // Check pull result
                             if let Some((_, pull_result)) =
