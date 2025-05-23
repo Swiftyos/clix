@@ -9,8 +9,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      issues: read
-      pull-requests: read
+      issues: write
+      pull-requests: write
     steps:
       - uses: xt0rted/pull-request-comment-branch@v3
         id: comment-branch
@@ -38,5 +38,5 @@ jobs:
       - name: Push changes
         uses: ad-m/github-push-action@master
         with:
-          github_token: ${{ secrets.PAT }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           branch: ${{ steps.comment-branch.outputs.head_ref }}
