@@ -3,17 +3,18 @@ use clap_complete::{Shell as CompletionShell, generate};
 use colored::Colorize;
 use std::collections::HashMap;
 use std::fs;
-use std::io;
+use std::io::{self, Write};
 use std::process::exit;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use clix::ai::{ConversationSession, ConversationState, MessageRole};
 use clix::cli::app::{CliArgs, Commands, FlowCommands, GitCommands, SettingsCommands, Shell};
 use clix::commands::{
     Command, CommandExecutor, Workflow, WorkflowStep, WorkflowVariable, WorkflowVariableProfile,
 };
 use clix::error::{ClixError, Result};
 use clix::share::{ExportManager, ImportManager};
-use clix::storage::GitIntegratedStorage;
+use clix::storage::{ConversationStorage, GitIntegratedStorage};
 use clix::{ClaudeAssistant, SettingsManager};
 
 fn main() {
@@ -542,107 +543,37 @@ fn run() -> Result<()> {
             let settings_manager = SettingsManager::new()?;
             let settings = settings_manager.load()?;
 
-            // Initialize Claude Assistant
+            // Initialize Claude Assistant and conversation storage
             let assistant = ClaudeAssistant::new(settings)?;
+            let conversation_storage = ConversationStorage::new()?;
 
             // Get all commands and workflows for context
             let commands = storage.list_commands()?;
             let workflows = storage.list_workflows()?;
 
-            // Format question and get response
-            println!("{} {}", "Question:".green().bold(), ask_args.question);
-
             // Convert to references for the assistant
             let command_refs: Vec<&Command> = commands.iter().collect();
             let workflow_refs: Vec<&Workflow> = workflows.iter().collect();
 
-            // Ask Claude
-            let (response, action) =
-                assistant.ask(&ask_args.question, command_refs, workflow_refs)?;
-
-            // Print Claude's response
-            println!("{}", "\nClaude's Response:".blue().bold());
-            println!("{}", response);
-
-            // Handle suggested action
-            match action {
-                clix::ai::claude::ClaudeAction::RunCommand(ref name) => {
-                    if assistant.confirm_action(&action)? {
-                        let command = storage.get_command(name)?;
-                        let output = CommandExecutor::execute_command(&command)?;
-                        CommandExecutor::print_command_output(&output);
-
-                        // Update usage statistics
-                        storage.update_command_usage(name)?;
-                    }
-                }
-                clix::ai::claude::ClaudeAction::RunWorkflow(ref name) => {
-                    if assistant.confirm_action(&action)? {
-                        let workflow = storage.get_workflow(name)?;
-                        let results = CommandExecutor::execute_workflow(&workflow, None, None)?;
-
-                        // Print all results
-                        println!("\n{}", "Workflow Results:".blue().bold());
-                        println!("{}", "=".repeat(50));
-
-                        for (step_name, result) in results {
-                            println!("{}: {}", "Step".green().bold(), step_name);
-
-                            match result {
-                                Ok(output) => CommandExecutor::print_command_output(&output),
-                                Err(e) => println!("{} {}", "Error:".red().bold(), e),
-                            }
-
-                            println!("{}", "-".repeat(50));
-                        }
-
-                        // Update usage statistics
-                        storage.update_workflow_usage(name)?;
-                    }
-                }
-                clix::ai::claude::ClaudeAction::CreateCommand {
-                    ref name,
-                    ref description,
-                    ref command,
-                } => {
-                    if assistant.confirm_action(&action)? {
-                        let command = Command::new(
-                            name.clone(),
-                            description.clone(),
-                            command.clone(),
-                            vec!["claude-generated".to_string()],
-                        );
-
-                        storage.add_command(command)?;
-                        println!(
-                            "{} Command '{}' added successfully",
-                            "Success:".green().bold(),
-                            name
-                        );
-                    }
-                }
-                clix::ai::claude::ClaudeAction::CreateWorkflow {
-                    ref name,
-                    ref description,
-                    ref steps,
-                } => {
-                    if assistant.confirm_action(&action)? {
-                        let workflow = Workflow::new(
-                            name.clone(),
-                            description.clone(),
-                            steps.clone(),
-                            vec!["claude-generated".to_string()],
-                        );
-
-                        storage.add_workflow(workflow)?;
-                        println!(
-                            "{} Workflow '{}' added successfully",
-                            "Success:".green().bold(),
-                            name
-                        );
-                    }
-                }
-                clix::ai::claude::ClaudeAction::NoAction => {}
+            // Handle interactive mode or session continuation
+            if ask_args.interactive || ask_args.session.is_some() {
+                handle_conversational_ask(
+                    ask_args,
+                    &assistant,
+                    &conversation_storage,
+                    &storage,
+                    command_refs,
+                    workflow_refs,
+                )?;
+            } else {
+                // Handle single-shot ask (legacy behavior)
+                handle_single_ask(
+                    &ask_args.question,
+                    &assistant,
+                    &storage,
+                    command_refs,
+                    workflow_refs,
+                )?;
             }
         }
 
@@ -796,8 +727,8 @@ fn run() -> Result<()> {
 
         Commands::Git(git_command) => match git_command {
             GitCommands::AddRepo(add_repo_args) => {
-                let git_manager = storage.get_git_manager();
-                git_manager
+                storage
+                    .get_git_manager()
                     .add_repository(add_repo_args.name.clone(), add_repo_args.url.clone())?;
 
                 println!(
@@ -811,8 +742,9 @@ fn run() -> Result<()> {
             }
 
             GitCommands::RemoveRepo(remove_repo_args) => {
-                let git_manager = storage.get_git_manager();
-                git_manager.remove_repository(&remove_repo_args.name)?;
+                storage
+                    .get_git_manager()
+                    .remove_repository(&remove_repo_args.name)?;
 
                 println!(
                     "{} Repository '{}' removed successfully",
@@ -918,6 +850,244 @@ fn run() -> Result<()> {
                 storage.load_from_repositories()?;
             }
         },
+    }
+
+    Ok(())
+}
+
+fn handle_single_ask(
+    question: &str,
+    assistant: &ClaudeAssistant,
+    storage: &GitIntegratedStorage,
+    command_refs: Vec<&Command>,
+    workflow_refs: Vec<&Workflow>,
+) -> Result<()> {
+    // Format question and get response
+    println!("{} {}", "Question:".green().bold(), question);
+
+    // Ask Claude (legacy single-shot mode)
+    let (response, action) = assistant.ask(question, command_refs, workflow_refs)?;
+
+    // Print Claude's response
+    println!("{}", "\nClaude's Response:".blue().bold());
+    println!("{}", response);
+
+    // Handle suggested action
+    execute_claude_action(action, assistant, storage)?;
+
+    Ok(())
+}
+
+fn handle_conversational_ask(
+    ask_args: clix::cli::app::AskArgs,
+    assistant: &ClaudeAssistant,
+    conversation_storage: &ConversationStorage,
+    storage: &GitIntegratedStorage,
+    command_refs: Vec<&Command>,
+    workflow_refs: Vec<&Workflow>,
+) -> Result<()> {
+    let mut session = if let Some(session_id) = &ask_args.session {
+        // Load existing session
+        match conversation_storage.get_session(session_id)? {
+            Some(session) => {
+                println!(
+                    "{} Continuing conversation session: {}",
+                    "Info:".blue().bold(),
+                    session_id
+                );
+                session
+            }
+            None => {
+                return Err(ClixError::NotFound(format!(
+                    "Conversation session '{}' not found",
+                    session_id
+                )));
+            }
+        }
+    } else {
+        // Create new session
+        let session =
+            ConversationSession::with_context(command_refs.clone(), workflow_refs.clone());
+        println!(
+            "{} Started new conversation session: {}",
+            "Info:".blue().bold(),
+            session.id
+        );
+
+        if ask_args.interactive {
+            println!(
+                "{} Interactive mode enabled. Type 'exit' or 'quit' to end the conversation.",
+                "Info:".yellow().bold()
+            );
+        }
+
+        session
+    };
+
+    // Add user's initial question to session
+    session.add_message(MessageRole::User, ask_args.question.clone());
+    let mut current_question = ask_args.question.clone();
+
+    // Main conversation loop
+    loop {
+        println!("{} {}", "Question:".green().bold(), current_question);
+
+        // Ask Claude in conversational mode
+        let (response, action) = assistant.ask_conversational(
+            &current_question,
+            &session,
+            command_refs.clone(),
+            workflow_refs.clone(),
+        )?;
+
+        // Add Claude's response to session
+        session.add_message(MessageRole::Assistant, response.clone());
+
+        // Print Claude's response
+        println!("{}", "\nClaude's Response:".blue().bold());
+        println!("{}", response);
+
+        // Handle suggested action
+        execute_claude_action(action, assistant, storage)?;
+
+        // Save session state
+        conversation_storage.save_session(&session)?;
+
+        // Check if we should continue the conversation
+        if !ask_args.interactive {
+            break; // Single question in session mode
+        }
+
+        // Check conversation state
+        match session.state {
+            ConversationState::Completed => {
+                println!("{} Conversation completed.", "Info:".green().bold());
+                break;
+            }
+            _ => {
+                // Continue conversation - get next input
+                print!(
+                    "\n{} ",
+                    "Continue conversation (or 'exit'/'quit' to end):"
+                        .cyan()
+                        .bold()
+                );
+                io::stdout().flush().map_err(|e| {
+                    ClixError::CommandExecutionFailed(format!("Failed to flush stdout: {}", e))
+                })?;
+
+                let mut input = String::new();
+                io::stdin().read_line(&mut input).map_err(|e| {
+                    ClixError::CommandExecutionFailed(format!("Failed to read user input: {}", e))
+                })?;
+
+                let input = input.trim();
+                if input.is_empty() || input == "exit" || input == "quit" {
+                    session.set_state(ConversationState::Completed);
+                    conversation_storage.update_session(&session)?;
+                    println!(
+                        "{} Conversation ended. Session ID: {}",
+                        "Info:".green().bold(),
+                        session.id
+                    );
+                    break;
+                }
+
+                // Add new user message and continue loop
+                session.add_message(MessageRole::User, input.to_string());
+                current_question = input.to_string();
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn execute_claude_action(
+    action: clix::ai::claude::ClaudeAction,
+    assistant: &ClaudeAssistant,
+    storage: &GitIntegratedStorage,
+) -> Result<()> {
+    use clix::ai::claude::ClaudeAction;
+
+    match action {
+        ClaudeAction::RunCommand(ref name) => {
+            if assistant.confirm_action(&action)? {
+                let command = storage.get_command(name)?;
+                let output = CommandExecutor::execute_command(&command)?;
+                CommandExecutor::print_command_output(&output);
+
+                // Update usage statistics
+                storage.update_command_usage(name)?;
+            }
+        }
+        ClaudeAction::RunWorkflow(ref name) => {
+            if assistant.confirm_action(&action)? {
+                let workflow = storage.get_workflow(name)?;
+                let results = CommandExecutor::execute_workflow(&workflow, None, None)?;
+
+                // Print all results
+                println!("\n{}", "Workflow Results:".blue().bold());
+                println!("{}", "=".repeat(50));
+
+                for (step_name, result) in results {
+                    println!("{}: {}", "Step".green().bold(), step_name);
+
+                    match result {
+                        Ok(output) => CommandExecutor::print_command_output(&output),
+                        Err(e) => println!("{} {}", "Error:".red().bold(), e),
+                    }
+
+                    println!("{}", "-".repeat(50));
+                }
+
+                // Update usage statistics
+                storage.update_workflow_usage(name)?;
+            }
+        }
+        ClaudeAction::CreateCommand {
+            ref name,
+            ref description,
+            ref command,
+        } => {
+            if assistant.confirm_action(&action)? {
+                let command = Command::new(
+                    name.clone(),
+                    description.clone(),
+                    command.clone(),
+                    vec!["claude-generated".to_string()],
+                );
+
+                storage.add_command(command)?;
+                println!(
+                    "{} Command '{}' added successfully",
+                    "Success:".green().bold(),
+                    name
+                );
+            }
+        }
+        ClaudeAction::CreateWorkflow {
+            ref name,
+            ref description,
+            ref steps,
+        } => {
+            if assistant.confirm_action(&action)? {
+                let workflow = Workflow::new(
+                    name.clone(),
+                    description.clone(),
+                    steps.clone(),
+                    vec!["claude-generated".to_string()],
+                );
+
+                storage.add_workflow(workflow)?;
+                println!(
+                    "{} Workflow '{}' added successfully",
+                    "Success:".green().bold(),
+                    name
+                );
+            }
+        }
+        ClaudeAction::NoAction => {}
     }
 
     Ok(())

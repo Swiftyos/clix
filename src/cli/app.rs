@@ -203,6 +203,14 @@ pub struct ImportArgs {
 pub struct AskArgs {
     /// The question or request for Claude
     pub question: String,
+
+    /// Start an interactive conversation with Claude (optional)
+    #[arg(short, long)]
+    pub interactive: bool,
+
+    /// Continue an existing conversation session by ID
+    #[arg(short, long)]
+    pub session: Option<String>,
 }
 
 #[derive(Subcommand, Debug)]

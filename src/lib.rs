@@ -15,4 +15,4 @@ pub use error::{ClixError, Result};
 pub use git::{GitRepository, GitRepositoryManager, RepoConfig};
 pub use settings::{Settings, SettingsManager};
 pub use share::{ExportManager, ImportManager};
-pub use storage::{GitIntegratedStorage, Storage};
+pub use storage::{ConversationStorage, GitIntegratedStorage, Storage};
