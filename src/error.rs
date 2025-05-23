@@ -40,6 +40,9 @@ pub enum ClixError {
 
     #[error("Invalid input: {0}")]
     InvalidInput(String),
+
+    #[error("Git error: {0}")]
+    GitError(String),
 }
 
 impl ClixError {
@@ -96,6 +99,9 @@ impl ClixError {
             ClixError::InvalidInput(msg) => {
                 format!("Invalid input: {}\n💡 Please check the input format and valid ranges.", msg)
             }
+            ClixError::GitError(msg) => {
+                format!("Git operation failed: {}\n💡 Check repository status and network connectivity.", msg)
+            }
         }
     }
 
@@ -127,6 +133,11 @@ impl ClixError {
                 "Verify API key is set correctly".to_string(),
                 "Try again in a few moments".to_string(),
             ],
+            ClixError::GitError(_) => vec![
+                "Check if git repository is properly initialized".to_string(),
+                "Verify network connectivity for remote operations".to_string(),
+                "Ensure you have proper permissions for the repository".to_string(),
+            ],
             _ => vec!["Consult the documentation for more help".to_string()],
         }
     }
@@ -135,7 +146,10 @@ impl ClixError {
     pub fn is_retryable(&self) -> bool {
         matches!(
             self,
-            ClixError::NetworkError(_) | ClixError::ApiError(_) | ClixError::RateLimitError(_)
+            ClixError::NetworkError(_)
+                | ClixError::ApiError(_)
+                | ClixError::RateLimitError(_)
+                | ClixError::GitError(_)
         )
     }
 }

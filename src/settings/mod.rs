@@ -11,6 +11,9 @@ pub struct Settings {
 
     #[serde(default)]
     pub ai_settings: AiSettings,
+
+    #[serde(default)]
+    pub git_settings: GitSettings,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -20,6 +23,12 @@ pub struct AiSettings {
 
     #[serde(default = "default_max_tokens")]
     pub max_tokens: usize,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GitSettings {
+    #[serde(default = "default_commit_message_prefix")]
+    pub commit_message_prefix: String,
 }
 
 fn default_ai_model() -> String {
@@ -34,11 +43,16 @@ fn default_max_tokens() -> usize {
     4000
 }
 
+fn default_commit_message_prefix() -> String {
+    "clix:".to_string()
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Settings {
             ai_model: default_ai_model(),
             ai_settings: AiSettings::default(),
+            git_settings: GitSettings::default(),
         }
     }
 }
@@ -48,6 +62,14 @@ impl Default for AiSettings {
         AiSettings {
             temperature: default_temperature(),
             max_tokens: default_max_tokens(),
+        }
+    }
+}
+
+impl Default for GitSettings {
+    fn default() -> Self {
+        GitSettings {
+            commit_message_prefix: default_commit_message_prefix(),
         }
     }
 }
@@ -106,13 +128,13 @@ impl SettingsManager {
 
     pub fn update_ai_temperature(&self, temperature: f32) -> Result<()> {
         // Validate temperature range (0.0 to 1.0)
-        if temperature < 0.0 || temperature > 1.0 {
+        if !(0.0..=1.0).contains(&temperature) {
             return Err(ClixError::InvalidInput(format!(
-                "Temperature must be between 0.0 and 1.0, got: {}", 
+                "Temperature must be between 0.0 and 1.0, got: {}",
                 temperature
             )));
         }
-        
+
         let mut settings = self.load()?;
         settings.ai_settings.temperature = temperature;
         self.save(&settings)

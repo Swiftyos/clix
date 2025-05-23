@@ -1,5 +1,5 @@
 use clix::ai::ClaudeAssistant;
-use clix::settings::{AiSettings, Settings};
+use clix::settings::{AiSettings, GitSettings, Settings};
 use clix::{Command, Workflow};
 use dotenv::dotenv;
 use std::env;
@@ -34,6 +34,7 @@ fn test_claude_api_connection() {
             temperature: 0.7,
             max_tokens: 200, // Small for testing
         },
+        git_settings: GitSettings::default(),
     };
 
     // Initialize the assistant
@@ -108,6 +109,7 @@ fn test_claude_list_models_api() {
             temperature: 0.7,
             max_tokens: 200,
         },
+        git_settings: GitSettings::default(),
     };
 
     // Initialize the assistant

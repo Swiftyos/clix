@@ -8,6 +8,7 @@ use clix::commands::{
 use clix::share::{ExportManager, ImportManager};
 use clix::storage::Storage;
 use std::collections::HashMap;
+use std::env;
 use std::fs;
 use std::path::PathBuf;
 use test_context::{AsyncTestContext, test_context};
@@ -862,14 +863,17 @@ async fn test_comprehensive_integration(ctx: &mut E2ETestContext) {
     // Test with dev environment
     let dev_vars = HashMap::from([("ENV".to_string(), "dev".to_string())]);
 
-    let results = CommandExecutor::execute_workflow_with_approval(&workflow, None, Some(dev_vars), false).unwrap();
+    let results =
+        CommandExecutor::execute_workflow_with_approval(&workflow, None, Some(dev_vars), false)
+            .unwrap();
     assert!(results.len() >= 3); // At least the conditional, branch, and deploy steps
 
     // Test with invalid environment (should fail due to return action)
     let invalid_vars = HashMap::from([("ENV".to_string(), "invalid".to_string())]);
 
     // This should fail or return early due to the conditional with return action
-    let invalid_results = CommandExecutor::execute_workflow_with_approval(&workflow, None, Some(invalid_vars), false);
+    let invalid_results =
+        CommandExecutor::execute_workflow_with_approval(&workflow, None, Some(invalid_vars), false);
     // The workflow might still execute but the conditional should handle the invalid case
     assert!(invalid_results.is_ok()); // The workflow executes, but the conditional handles the error
 
