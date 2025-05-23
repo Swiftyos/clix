@@ -38,6 +38,9 @@ pub enum ClixError {
     #[error("Rate limit exceeded: {0}")]
     RateLimitError(String),
 
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
+
     #[error("Git error: {0}")]
     GitError(String),
 }
@@ -93,8 +96,11 @@ impl ClixError {
             ClixError::HeaderValueError(e) => {
                 format!("Header format error: {}\n💡 Check your API configuration.", e)
             }
+            ClixError::InvalidInput(msg) => {
+                format!("Invalid input: {}\n💡 Please check the input format and valid ranges.", msg)
+            }
             ClixError::GitError(msg) => {
-                format!("Git operation failed: {}\n💡 Check repository access and git configuration.", msg)
+                format!("Git operation failed: {}\n💡 Check repository access, git configuration, and network connectivity", msg)
             }
         }
     }
@@ -128,6 +134,9 @@ impl ClixError {
                 "Try again in a few moments".to_string(),
             ],
             ClixError::GitError(_) => vec![
+                "Check if git repository is properly initialized".to_string(),
+                "Verify network connectivity for remote operations".to_string(),
+                "Ensure you have proper permissions for the repository".to_string(),
                 "Check if git is installed and configured".to_string(),
                 "Verify repository URL and access permissions".to_string(),
                 "Ensure SSH keys are set up correctly for private repos".to_string(),
@@ -140,7 +149,10 @@ impl ClixError {
     pub fn is_retryable(&self) -> bool {
         matches!(
             self,
-            ClixError::NetworkError(_) | ClixError::ApiError(_) | ClixError::RateLimitError(_)
+            ClixError::NetworkError(_)
+                | ClixError::ApiError(_)
+                | ClixError::RateLimitError(_)
+                | ClixError::GitError(_)
         )
     }
 }

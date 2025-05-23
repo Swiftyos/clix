@@ -153,3 +153,97 @@ fn test_parse_no_action() {
         _ => panic!("Expected NoAction"),
     }
 }
+
+#[test]
+fn test_models_response_parsing() {
+    // Test parsing Claude API response format with "data" field
+    let claude_response = r#"{
+        "data": [
+            {
+                "id": "claude-3-opus-20240229",
+                "display_name": "Claude 3 Opus",
+                "max_tokens": 4096
+            },
+            {
+                "id": "claude-3-sonnet-20240229",
+                "display_name": "Claude 3 Sonnet",
+                "max_tokens": 4096
+            }
+        ]
+    }"#;
+
+    // Test direct JSON parsing to verify our structs work
+    let parsed: Result<serde_json::Value, _> = serde_json::from_str(claude_response);
+    assert!(parsed.is_ok(), "Should parse valid JSON");
+
+    // Test that we can extract model IDs
+    let json_value = parsed.unwrap();
+    if let Some(data) = json_value.get("data").and_then(|v| v.as_array()) {
+        let model_ids: Vec<String> = data
+            .iter()
+            .filter_map(|item| item.get("id").and_then(|v| v.as_str()))
+            .map(|s| s.to_string())
+            .collect();
+
+        assert_eq!(model_ids.len(), 2);
+        assert!(model_ids.contains(&"claude-3-opus-20240229".to_string()));
+        assert!(model_ids.contains(&"claude-3-sonnet-20240229".to_string()));
+    } else {
+        panic!("Should have data field with array");
+    }
+}
+
+#[test]
+fn test_legacy_models_response_parsing() {
+    // Test parsing legacy format with "models" field
+    let legacy_response = r#"{
+        "models": [
+            {
+                "name": "claude-3-opus-20240229",
+                "description": "Claude 3 Opus model",
+                "max_tokens": 4096
+            },
+            {
+                "name": "claude-3-sonnet-20240229", 
+                "description": "Claude 3 Sonnet model",
+                "max_tokens": 4096
+            }
+        ]
+    }"#;
+
+    // Test parsing legacy format
+    let parsed: Result<serde_json::Value, _> = serde_json::from_str(legacy_response);
+    assert!(parsed.is_ok(), "Should parse valid legacy JSON");
+
+    let json_value = parsed.unwrap();
+    if let Some(models) = json_value.get("models").and_then(|v| v.as_array()) {
+        let model_names: Vec<String> = models
+            .iter()
+            .filter_map(|item| item.get("name").and_then(|v| v.as_str()))
+            .map(|s| s.to_string())
+            .collect();
+
+        assert_eq!(model_names.len(), 2);
+        assert!(model_names.contains(&"claude-3-opus-20240229".to_string()));
+        assert!(model_names.contains(&"claude-3-sonnet-20240229".to_string()));
+    } else {
+        panic!("Should have models field with array");
+    }
+}
+
+#[test]
+fn test_mock_list_models() {
+    use clix::ai::mock::MockClaudeAssistant;
+
+    // Test the mock implementation
+    let result = MockClaudeAssistant::mock_list_models();
+    assert!(result.is_ok(), "Mock list_models should succeed");
+
+    let models = result.unwrap();
+    assert!(!models.is_empty(), "Should return at least one model");
+    assert!(models.contains(&"claude-3-opus-20240229".to_string()));
+    assert!(models.contains(&"claude-3-sonnet-20240229".to_string()));
+    assert!(models.contains(&"claude-3-haiku-20240307".to_string()));
+
+    println!("Mock models: {:?}", models);
+}

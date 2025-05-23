@@ -40,6 +40,17 @@ impl Storage {
         })
     }
 
+    /// Create storage with custom directory for testing
+    pub fn new_with_dir(store_dir: PathBuf) -> Result<Self> {
+        fs::create_dir_all(&store_dir)?;
+        let store_path = store_dir.join("commands.json");
+
+        Ok(Storage {
+            store_path,
+            cache: RefCell::new(None),
+        })
+    }
+
     /// Load store with caching for improved performance
     pub fn load(&self) -> Result<CommandStore> {
         self.load_with_cache()

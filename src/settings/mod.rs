@@ -112,6 +112,14 @@ impl SettingsManager {
         Ok(SettingsManager { settings_path })
     }
 
+    /// Create settings manager with custom directory for testing
+    pub fn new_with_dir(settings_dir: PathBuf) -> Result<Self> {
+        fs::create_dir_all(&settings_dir)?;
+        let settings_path = settings_dir.join("settings.json");
+
+        Ok(SettingsManager { settings_path })
+    }
+
     pub fn load(&self) -> Result<Settings> {
         if !self.settings_path.exists() {
             return Ok(Settings::default());
@@ -135,6 +143,14 @@ impl SettingsManager {
     }
 
     pub fn update_ai_temperature(&self, temperature: f32) -> Result<()> {
+        // Validate temperature range (0.0 to 1.0)
+        if !(0.0..=1.0).contains(&temperature) {
+            return Err(ClixError::InvalidInput(format!(
+                "Temperature must be between 0.0 and 1.0, got: {}",
+                temperature
+            )));
+        }
+
         let mut settings = self.load()?;
         settings.ai_settings.temperature = temperature;
         self.save(&settings)

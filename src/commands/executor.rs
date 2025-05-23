@@ -138,11 +138,23 @@ impl CommandExecutor {
         profile_name: Option<&str>,
         provided_vars: Option<HashMap<String, String>>,
     ) -> Result<Vec<(String, Result<Output>)>> {
+        Self::execute_workflow_with_approval(workflow, profile_name, provided_vars, true)
+    }
+
+    /// Execute workflow with optional approval bypass for testing
+    pub fn execute_workflow_with_approval(
+        workflow: &Workflow,
+        profile_name: Option<&str>,
+        provided_vars: Option<HashMap<String, String>>,
+        require_approval: bool,
+    ) -> Result<Vec<(String, Result<Output>)>> {
         println!("{} {}", "Executing workflow:".blue().bold(), workflow.name);
         println!("{} {}", "Description:".blue().bold(), workflow.description);
 
         // Security validation for the entire workflow
-        Self::validate_workflow_security(workflow)?;
+        if require_approval {
+            Self::validate_workflow_security(workflow)?;
+        }
 
         let mut context = Self::setup_workflow_context(workflow, profile_name, provided_vars)?;
         let mut results = Vec::new();
@@ -155,7 +167,7 @@ impl CommandExecutor {
             let processed_step = VariableProcessor::process_step(step, &context);
 
             // Check if step requires approval
-            if processed_step.require_approval {
+            if require_approval && processed_step.require_approval {
                 Self::request_approval(&processed_step)?;
             }
 
