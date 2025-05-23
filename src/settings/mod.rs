@@ -27,6 +27,12 @@ pub struct AiSettings {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GitSettings {
+    #[serde(default = "default_auto_sync")]
+    pub auto_sync: bool,
+
+    #[serde(default = "default_auto_commit")]
+    pub auto_commit: bool,
+
     #[serde(default = "default_commit_message_prefix")]
     pub commit_message_prefix: String,
 }
@@ -41,6 +47,14 @@ fn default_temperature() -> f32 {
 
 fn default_max_tokens() -> usize {
     4000
+}
+
+fn default_auto_sync() -> bool {
+    true
+}
+
+fn default_auto_commit() -> bool {
+    true
 }
 
 fn default_commit_message_prefix() -> String {
@@ -69,6 +83,8 @@ impl Default for AiSettings {
 impl Default for GitSettings {
     fn default() -> Self {
         GitSettings {
+            auto_sync: default_auto_sync(),
+            auto_commit: default_auto_commit(),
             commit_message_prefix: default_commit_message_prefix(),
         }
     }

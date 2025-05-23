@@ -100,7 +100,7 @@ impl ClixError {
                 format!("Invalid input: {}\n💡 Please check the input format and valid ranges.", msg)
             }
             ClixError::GitError(msg) => {
-                format!("Git operation failed: {}\n💡 Check repository status and network connectivity.", msg)
+                format!("Git operation failed: {}\n💡 Check repository access, git configuration, and network connectivity", msg)
             }
         }
     }
@@ -137,6 +137,9 @@ impl ClixError {
                 "Check if git repository is properly initialized".to_string(),
                 "Verify network connectivity for remote operations".to_string(),
                 "Ensure you have proper permissions for the repository".to_string(),
+                "Check if git is installed and configured".to_string(),
+                "Verify repository URL and access permissions".to_string(),
+                "Ensure SSH keys are set up correctly for private repos".to_string(),
             ],
             _ => vec!["Consult the documentation for more help".to_string()],
         }
