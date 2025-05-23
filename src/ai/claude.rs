@@ -537,9 +537,20 @@ Follow these guidelines:
         if !command_history.is_empty() {
             prompt.push_str("\nAvailable commands:\n");
             for cmd in command_history {
+                let command_display = if cmd.is_workflow() {
+                    format!(
+                        "Workflow with {} steps",
+                        cmd.steps.as_ref().map_or(0, |s| s.len())
+                    )
+                } else {
+                    cmd.command
+                        .as_ref()
+                        .unwrap_or(&"<no command>".to_string())
+                        .clone()
+                };
                 prompt.push_str(&format!(
                     "- {}: {}\n  Command: {}\n",
-                    cmd.name, cmd.description, cmd.command
+                    cmd.name, cmd.description, command_display
                 ));
             }
         }
@@ -1030,9 +1041,20 @@ Final summary or goodbye message...
         if !command_history.is_empty() {
             prompt.push_str("\nAvailable commands:\n");
             for cmd in command_history {
+                let command_display = if cmd.is_workflow() {
+                    format!(
+                        "Workflow with {} steps",
+                        cmd.steps.as_ref().map_or(0, |s| s.len())
+                    )
+                } else {
+                    cmd.command
+                        .as_ref()
+                        .unwrap_or(&"<no command>".to_string())
+                        .clone()
+                };
                 prompt.push_str(&format!(
                     "- {}: {}\n  Command: {}\n",
-                    cmd.name, cmd.description, cmd.command
+                    cmd.name, cmd.description, command_display
                 ));
             }
         }

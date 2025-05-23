@@ -183,6 +183,18 @@ impl Storage {
         }
     }
 
+    pub fn update_command(&self, command: &Command) -> Result<()> {
+        let mut store = self.load()?;
+
+        if store.commands.contains_key(&command.name) {
+            store.commands.insert(command.name.clone(), command.clone());
+            self.save(&store)?;
+            Ok(())
+        } else {
+            Err(ClixError::CommandNotFound(command.name.clone()))
+        }
+    }
+
     pub fn add_workflow(&self, workflow: Workflow) -> Result<()> {
         let mut store = self.load()?;
         store.workflows.insert(workflow.name.clone(), workflow);

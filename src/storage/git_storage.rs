@@ -188,6 +188,21 @@ impl GitIntegratedStorage {
         self.local_storage.update_command_usage(name)
     }
 
+    pub fn update_command(&self, command: &Command) -> Result<()> {
+        let result = self.local_storage.update_command(command);
+
+        // If successful, try to commit to repositories
+        if result.is_ok() {
+            if let Err(e) =
+                self.commit_changes_to_repositories(&format!("Update command: {}", command.name))
+            {
+                eprintln!("Warning: Failed to sync to git repositories: {}", e);
+            }
+        }
+
+        result
+    }
+
     pub fn add_workflow(&self, workflow: Workflow) -> Result<()> {
         let result = self.local_storage.add_workflow(workflow);
 

@@ -16,21 +16,25 @@ pub struct CommandExecutor;
 
 impl CommandExecutor {
     pub fn execute_command(command: &Command) -> Result<Output> {
+        let command_str = command.command.as_ref().ok_or_else(|| {
+            ClixError::InvalidCommandFormat(
+                "Command has no executable command string (it may be a workflow)".to_string(),
+            )
+        })?;
+
         println!("{} {}", "Executing:".blue().bold(), command.name);
         println!("{} {}", "Description:".blue().bold(), command.description);
-        println!("{} {}", "Command:".blue().bold(), command.command);
+        println!("{} {}", "Command:".blue().bold(), command_str);
 
         // Security validation
-        Self::validate_command_security(&command.command)?;
+        Self::validate_command_security(command_str)?;
 
         let output = if cfg!(target_os = "windows") {
             ProcessCommand::new("cmd")
-                .args(["/C", &command.command])
+                .args(["/C", command_str])
                 .output()
         } else {
-            ProcessCommand::new("sh")
-                .args(["-c", &command.command])
-                .output()
+            ProcessCommand::new("sh").args(["-c", command_str]).output()
         };
 
         match output {

@@ -21,9 +21,23 @@ pub enum Commands {
     /// Remove a stored command
     Remove(RemoveArgs),
 
-    /// Workflow management commands
-    #[command(subcommand)]
-    Flow(FlowCommands),
+    /// Add a variable to a workflow
+    AddVar(AddWorkflowVarArgs),
+
+    /// Add a profile to a workflow
+    AddProfile(AddWorkflowProfileArgs),
+
+    /// List profiles for a workflow
+    ListProfiles(ListWorkflowProfilesArgs),
+
+    /// Add a conditional step to a workflow
+    AddCondition(AddConditionArgs),
+
+    /// Add a branch step to a workflow
+    AddBranch(AddBranchArgs),
+
+    /// Convert a shell function to a workflow
+    ConvertFunction(ConvertFunctionArgs),
 
     /// Export commands and workflows to a file
     Export(ExportArgs),
@@ -46,39 +60,6 @@ pub enum Commands {
     Git(GitCommands),
 }
 
-#[derive(Subcommand, Debug)]
-pub enum FlowCommands {
-    /// Add a new workflow
-    Add(AddWorkflowArgs),
-
-    /// Run a stored workflow
-    Run(RunWorkflowArgs),
-
-    /// Remove a stored workflow
-    Remove(RemoveWorkflowArgs),
-
-    /// List all stored workflows
-    List(FlowListArgs),
-
-    /// Add a variable to a workflow
-    AddVar(AddWorkflowVarArgs),
-
-    /// Add a profile to a workflow
-    AddProfile(AddWorkflowProfileArgs),
-
-    /// List profiles for a workflow
-    ListProfiles(ListWorkflowProfilesArgs),
-
-    /// Add a conditional step to a workflow
-    AddCondition(AddConditionArgs),
-
-    /// Add a branch step to a workflow
-    AddBranch(AddBranchArgs),
-
-    /// Convert a shell function to a workflow
-    ConvertFunction(ConvertFunctionArgs),
-}
-
 #[derive(Args, Debug)]
 pub struct AddArgs {
     /// Name of the command
@@ -88,9 +69,13 @@ pub struct AddArgs {
     #[arg(short, long)]
     pub description: String,
 
-    /// The command to execute
-    #[arg(short, long)]
-    pub command: String,
+    /// The command to execute (for simple commands)
+    #[arg(short, long, conflicts_with = "steps_file")]
+    pub command: Option<String>,
+
+    /// Path to a JSON file containing workflow steps (for workflows)
+    #[arg(short = 'f', long, conflicts_with = "command")]
+    pub steps_file: Option<String>,
 
     /// Optional tags for categorization
     #[arg(short, long)]
@@ -101,6 +86,14 @@ pub struct AddArgs {
 pub struct RunArgs {
     /// Name of the command to run
     pub name: String,
+
+    /// Profile to use for variables (for workflows)
+    #[arg(short, long)]
+    pub profile: Option<String>,
+
+    /// Variable values in the format key=value (for workflows)
+    #[arg(short, long)]
+    pub var: Option<Vec<String>>,
 }
 
 #[derive(Args, Debug)]
@@ -119,53 +112,8 @@ pub struct ListArgs {
 }
 
 #[derive(Args, Debug)]
-pub struct FlowListArgs {
-    /// Filter workflows by tag
-    #[arg(short, long)]
-    pub tag: Option<String>,
-}
-
-#[derive(Args, Debug)]
 pub struct RemoveArgs {
     /// Name of the command to remove
-    pub name: String,
-}
-
-#[derive(Args, Debug)]
-pub struct AddWorkflowArgs {
-    /// Name of the workflow
-    pub name: String,
-
-    /// Description of the workflow
-    #[arg(short, long)]
-    pub description: String,
-
-    /// Path to a JSON file containing workflow steps
-    #[arg(short, long)]
-    pub steps_file: String,
-
-    /// Optional tags for categorization
-    #[arg(short, long)]
-    pub tags: Option<Vec<String>>,
-}
-
-#[derive(Args, Debug)]
-pub struct RunWorkflowArgs {
-    /// Name of the workflow to run
-    pub name: String,
-
-    /// Profile to use for variables
-    #[arg(short, long)]
-    pub profile: Option<String>,
-
-    /// Variable values in the format key=value
-    #[arg(short, long)]
-    pub var: Option<Vec<String>>,
-}
-
-#[derive(Args, Debug)]
-pub struct RemoveWorkflowArgs {
-    /// Name of the workflow to remove
     pub name: String,
 }
 
@@ -251,8 +199,8 @@ pub struct SetAiMaxTokensArgs {
 
 #[derive(Args, Debug)]
 pub struct AddWorkflowVarArgs {
-    /// Name of the workflow to add the variable to
-    pub workflow_name: String,
+    /// Name of the command/workflow to add the variable to
+    pub command_name: String,
 
     /// Name of the variable
     #[arg(short, long)]
@@ -273,8 +221,8 @@ pub struct AddWorkflowVarArgs {
 
 #[derive(Args, Debug)]
 pub struct AddWorkflowProfileArgs {
-    /// Name of the workflow to add the profile to
-    pub workflow_name: String,
+    /// Name of the command/workflow to add the profile to
+    pub command_name: String,
 
     /// Name of the profile
     #[arg(short, long)]
@@ -291,14 +239,14 @@ pub struct AddWorkflowProfileArgs {
 
 #[derive(Args, Debug)]
 pub struct ListWorkflowProfilesArgs {
-    /// Name of the workflow to list profiles for
-    pub workflow_name: String,
+    /// Name of the command/workflow to list profiles for
+    pub command_name: String,
 }
 
 #[derive(Args, Debug)]
 pub struct AddConditionArgs {
-    /// Name of the workflow to add the condition to
-    pub workflow_name: String,
+    /// Name of the command/workflow to add the condition to
+    pub command_name: String,
 
     /// Name of the conditional step
     #[arg(short, long)]
@@ -335,8 +283,8 @@ pub struct AddConditionArgs {
 
 #[derive(Args, Debug)]
 pub struct AddBranchArgs {
-    /// Name of the workflow to add the branch to
-    pub workflow_name: String,
+    /// Name of the command/workflow to add the branch to
+    pub command_name: String,
 
     /// Name of the branch step
     #[arg(short, long)]
@@ -361,8 +309,8 @@ pub struct AddBranchArgs {
 
 #[derive(Args, Debug)]
 pub struct ConvertFunctionArgs {
-    /// Name for the new workflow
-    pub workflow_name: String,
+    /// Name for the new command/workflow
+    pub command_name: String,
 
     /// Path to the shell script file containing the function
     #[arg(short, long)]
