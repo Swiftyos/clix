@@ -145,12 +145,16 @@ async fn test_gke_workflow_execution(ctx: &mut ConditionalExecutionContext) {
 
     // Verify workflow was imported
     let workflows = fresh_storage.list_workflows().unwrap();
-    
+
     // Debug: Print workflow names if assertion fails
     if workflows.len() != 1 {
-        eprintln!("Expected 1 workflow, found {}: {:?}", workflows.len(), workflows.iter().map(|w| &w.name).collect::<Vec<_>>());
+        eprintln!(
+            "Expected 1 workflow, found {}: {:?}",
+            workflows.len(),
+            workflows.iter().map(|w| &w.name).collect::<Vec<_>>()
+        );
     }
-    
+
     assert_eq!(workflows.len(), 1);
     assert!(workflows.iter().any(|w| w.name == "gke"));
 
