@@ -8,16 +8,7 @@ jobs:
     if: github.event.issue.pull_request && contains(github.event.comment.body, '@cargo format')
     runs-on: ubuntu-latest
     steps:
-      - name: Validate PR number
-        run: |
-          if [ -z "${{ github.event.pull_request.number }}" ]; then
-            echo "Error: Pull request number is missing"
-            exit 1
-          fi
       - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          ref: refs/pull/${{ github.event.pull_request.number }}/head
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
