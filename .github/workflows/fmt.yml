@@ -1,0 +1,28 @@
+name: Format on Comment
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  format:
+    if: github.event.issue.pull_request && contains(github.event.comment.body, '@cargo format')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: refs/pull/${{ github.event.pull_request.number }}/head
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Run formatting
+        run: |
+          cargo fmt
+          cargo clippy --fix --allow-dirty --allow-staged
+      - name: Commit changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add .
+          git diff --staged --quiet || git commit -m "Auto-format code"
+          git push
