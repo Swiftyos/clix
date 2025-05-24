@@ -28,14 +28,14 @@ Then run it with a specific project ID:
 
 ```bash
 # This will prompt you to replace ${PROJECT_ID} with your actual project ID
-clix run-workflow gcloud-resources
+clix run gcloud-resources
 ```
 
 Or set environment variables before running:
 
 ```bash
 export PROJECT_ID=my-actual-project-id
-clix run-workflow gcloud-resources
+clix run gcloud-resources
 ```
 
 ### Google Cloud Deploy Workflow (`auth-workflow.json`)
@@ -53,7 +53,7 @@ The workflow:
 
 ```bash
 clix import --input examples/auth-workflow.json
-clix run-workflow gcloud-deploy
+clix run gcloud-deploy
 ```
 
 ## Other Examples

@@ -43,7 +43,7 @@ A conditional step executes a block of steps only if a condition is true. It's s
 You can add a conditional step to a workflow using the CLI:
 
 ```bash
-clix flow add-condition my-workflow \
+clix add-condition my-workflow \
   --name "Check Authentication" \
   --description "Check if already authenticated with GCloud" \
   --condition "! gcloud auth application-default print-access-token > /dev/null 2>&1" \
@@ -72,7 +72,7 @@ Where `then_steps.json` contains:
 You can also add an else block that executes when the condition is false:
 
 ```bash
-clix flow add-condition my-workflow \
+clix add-condition my-workflow \
   --name "Check File Exists" \
   --description "Check if config file exists" \
   --condition "[ -f config.yaml ]" \
@@ -132,7 +132,7 @@ Branch steps (similar to switch/case statements) execute different blocks of ste
 You can add a branch step using the CLI:
 
 ```bash
-clix flow add-branch my-workflow \
+clix add-branch my-workflow \
   --name "Set Environment" \
   --description "Configure environment based on parameter" \
   --variable "env" \
@@ -195,7 +195,7 @@ Conditions in Clix support a wide range of expressions:
 You can convert existing shell functions to Clix workflows with conditionals:
 
 ```bash
-clix flow convert-function gke \
+clix convert-function gke \
   --file ~/.zshrc \
   --function gke \
   --description "Switch to a GKE cluster environment" \

@@ -2,19 +2,18 @@
 
 ## Short-term Goals
 
-- **AI Integration**: Integrate with AI services to enhance command suggestions and workflow creation
-- **Command Templates**: Add support for parameterized commands with user inputs
 - **Shell Completions**: Generate shell completions for bash, zsh, fish, etc.
-- **Import/Export**: Add functionality to import and export command and workflow collections
 - **Command History**: Track command execution history with timestamps and results
+- **Enhanced Variable Management**: Advanced variable management and templating features
+- **Performance Optimization**: Optimize command and workflow execution performance
 
 ## Medium-term Goals
 
 - **Web Interface**: Create a simple web UI for managing commands and workflows
-- **Sharing Commands**: Enable sharing commands with team members or the community
 - **Remote Execution**: Support for executing commands on remote machines
-- **Environment Management**: Add support for environment variables and secrets
+- **Environment Management**: Enhanced support for environment variables and secrets
 - **Command Scheduling**: Schedule commands and workflows to run at specific times
+- **Advanced Workflow Features**: Loop constructs, error handling, and conditional execution enhancements
 
 ## Long-term Goals
 
