@@ -65,6 +65,8 @@ clix remove list-files
 
 ## Working with Workflows
 
+Commands in Clix can be simple single-step operations or complex multi-step workflows.
+
 ### Creating a workflow
 
 Create a JSON file with the workflow steps:
@@ -89,13 +91,13 @@ Create a JSON file with the workflow steps:
 ### Adding a workflow
 
 ```bash
-clix flow add my-workflow --description "Basic system info workflow" --steps-file workflow.json
+clix add my-workflow --description "Basic system info workflow" --steps-file workflow.json
 ```
 
 ### Running a workflow
 
 ```bash
-clix flow run my-workflow
+clix run my-workflow
 ```
 
 ## Sharing Commands and Workflows
@@ -162,6 +164,6 @@ Create a workflow JSON file:
 Add and run the workflow:
 
 ```bash
-clix flow add gcp-troubleshoot --description "GCP service troubleshooting" --steps-file gcp-workflow.json --tags cloud,gcp
-clix flow run gcp-troubleshoot
+clix add gcp-troubleshoot --description "GCP service troubleshooting" --steps-file gcp-workflow.json --tags cloud,gcp
+clix run gcp-troubleshoot
 ```

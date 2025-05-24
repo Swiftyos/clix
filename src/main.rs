@@ -8,7 +8,7 @@ use std::process::exit;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use clix::ai::{ConversationSession, ConversationState, MessageRole};
-use clix::cli::app::{CliArgs, Commands, FlowCommands, GitCommands, SettingsCommands, Shell};
+use clix::cli::app::{CliArgs, Commands, GitCommands, SettingsCommands, Shell};
 use clix::commands::{
     Command, CommandExecutor, Workflow, WorkflowStep, WorkflowVariable, WorkflowVariableProfile,
 };
@@ -46,7 +46,21 @@ fn run() -> Result<()> {
     match args.command {
         Commands::Add(add_args) => {
             let tags = add_args.tags.unwrap_or_else(Vec::new);
-            let command = Command::new(add_args.name, add_args.description, add_args.command, tags);
+
+            let command = if let Some(command_str) = add_args.command {
+                // Simple command
+                Command::new(add_args.name, add_args.description, command_str, tags)
+            } else if let Some(steps_file) = add_args.steps_file {
+                // Workflow from steps file
+                let steps_json = fs::read_to_string(&steps_file).map_err(ClixError::Io)?;
+                let steps: Vec<WorkflowStep> =
+                    serde_json::from_str(&steps_json).map_err(ClixError::Serialization)?;
+                Command::new_workflow(add_args.name, add_args.description, steps, tags)
+            } else {
+                return Err(ClixError::InvalidCommandFormat(
+                    "Either --command or --steps-file must be provided".to_string(),
+                ));
+            };
 
             storage.add_command(command)?;
             println!("{} Command added successfully", "Success:".green().bold());
@@ -54,21 +68,81 @@ fn run() -> Result<()> {
 
         Commands::Run(run_args) => {
             let command = storage.get_command(&run_args.name)?;
-            let output = CommandExecutor::execute_command(&command)?;
-            CommandExecutor::print_command_output(&output);
+
+            if command.is_workflow() {
+                // Handle workflow execution
+                let vars = if let Some(var_args) = &run_args.var {
+                    let mut vars_map = HashMap::new();
+                    for var_str in var_args {
+                        if let Some((key, value)) = var_str.split_once('=') {
+                            vars_map.insert(key.to_string(), value.to_string());
+                        } else {
+                            return Err(ClixError::InvalidCommandFormat(format!(
+                                "Invalid variable format: {}, expected key=value",
+                                var_str
+                            )));
+                        }
+                    }
+                    Some(vars_map)
+                } else {
+                    None
+                };
+
+                // Create a temporary workflow for execution
+                let mut workflow = Workflow::new(
+                    command.name.clone(),
+                    command.description.clone(),
+                    command.steps.clone().unwrap_or_default(),
+                    command.tags.clone(),
+                );
+
+                // Add variables and profiles from the command
+                workflow.variables = command.variables.clone();
+                workflow.profiles = command.profiles.clone();
+
+                let results = CommandExecutor::execute_workflow(
+                    &workflow,
+                    run_args.profile.as_deref(),
+                    vars,
+                )?;
+
+                // Print all results
+                println!("\n{}", "Workflow Results:".blue().bold());
+                println!("{}", "=".repeat(50));
+
+                for (name, result) in results {
+                    println!("{}: {}", "Step".green().bold(), name);
+
+                    match result {
+                        Ok(output) => CommandExecutor::print_command_output(&output),
+                        Err(e) => println!("{} {}", "Error:".red().bold(), e),
+                    }
+
+                    println!("{}", "-".repeat(50));
+                }
+            } else {
+                // Handle simple command execution
+                let output = CommandExecutor::execute_command(&command)?;
+                CommandExecutor::print_command_output(&output);
+            }
 
             // Update usage statistics
             storage.update_command_usage(&run_args.name)?;
         }
 
         Commands::List(list_args) => {
-            let commands = storage.list_commands()?;
-            let workflows = storage.list_workflows()?;
+            let all_commands = storage.list_commands()?;
+            // Get old workflows for backward compatibility during migration
+            let old_workflows = storage.list_workflows()?;
 
-            if commands.is_empty() && workflows.is_empty() {
+            if all_commands.is_empty() && old_workflows.is_empty() {
                 println!("No commands or workflows stored yet.");
                 return Ok(());
             }
+
+            // Separate simple commands from workflows in the unified structure
+            let (simple_commands, workflow_commands): (Vec<_>, Vec<_>) =
+                all_commands.into_iter().partition(|cmd| !cmd.is_workflow());
 
             // Skip workflows if commands_only is set
             let show_workflows = !list_args.commands_only;
@@ -76,33 +150,46 @@ fn run() -> Result<()> {
             let show_commands = !list_args.workflows_only;
 
             // Filter by tag if provided
-            let filtered_commands = if let Some(ref tag) = list_args.tag {
-                commands
+            let filtered_simple_commands: Vec<_> = if let Some(ref tag) = list_args.tag {
+                simple_commands
                     .into_iter()
                     .filter(|cmd| cmd.tags.contains(tag))
-                    .collect::<Vec<_>>()
+                    .collect()
             } else {
-                commands
+                simple_commands
             };
 
-            let filtered_workflows = if let Some(ref tag) = list_args.tag {
-                workflows
+            let filtered_workflow_commands: Vec<_> = if let Some(ref tag) = list_args.tag {
+                workflow_commands
+                    .into_iter()
+                    .filter(|cmd| cmd.tags.contains(tag))
+                    .collect()
+            } else {
+                workflow_commands
+            };
+
+            let filtered_old_workflows: Vec<_> = if let Some(ref tag) = list_args.tag {
+                old_workflows
                     .into_iter()
                     .filter(|wf| wf.tags.contains(tag))
-                    .collect::<Vec<_>>()
+                    .collect()
             } else {
-                workflows
+                old_workflows
             };
 
-            // Print commands
-            if show_commands && !filtered_commands.is_empty() {
+            // Print simple commands
+            if show_commands && !filtered_simple_commands.is_empty() {
                 println!("\n{}", "Commands:".blue().bold());
                 println!("{}", "=".repeat(50));
 
-                for cmd in filtered_commands {
+                for cmd in &filtered_simple_commands {
                     println!("{}: {}", "Name".green().bold(), cmd.name);
                     println!("{}: {}", "Description".green(), cmd.description);
-                    println!("{}: {}", "Command".green(), cmd.command);
+                    println!(
+                        "{}: {}",
+                        "Command".green(),
+                        cmd.command.as_ref().unwrap_or(&"<no command>".to_string())
+                    );
 
                     if !cmd.tags.is_empty() {
                         println!("{}: {}", "Tags".green(), cmd.tags.join(", "));
@@ -127,12 +214,53 @@ fn run() -> Result<()> {
                 }
             }
 
-            // Print workflows
-            if show_workflows && !filtered_workflows.is_empty() {
+            // Print workflow commands (from unified structure)
+            if show_workflows && !filtered_workflow_commands.is_empty() {
                 println!("\n{}", "Workflows:".blue().bold());
                 println!("{}", "=".repeat(50));
 
-                for wf in filtered_workflows {
+                for cmd in &filtered_workflow_commands {
+                    println!("{}: {}", "Name".green().bold(), cmd.name);
+                    println!("{}: {}", "Description".green(), cmd.description);
+                    println!(
+                        "{}: {}",
+                        "Steps".green(),
+                        cmd.steps.as_ref().map_or(0, |s| s.len())
+                    );
+
+                    if !cmd.tags.is_empty() {
+                        println!("{}: {}", "Tags".green(), cmd.tags.join(", "));
+                    }
+
+                    if let Some(last_used) = cmd.last_used {
+                        let now = SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs();
+                        let days_ago = (now - last_used) / (60 * 60 * 24);
+
+                        println!(
+                            "{}: {} ({} days ago)",
+                            "Last used".green(),
+                            cmd.use_count,
+                            days_ago
+                        );
+                    }
+
+                    println!("{}", "-".repeat(50));
+                }
+            }
+
+            // Print old workflows (for backward compatibility during migration)
+            if show_workflows && !filtered_old_workflows.is_empty() {
+                if filtered_workflow_commands.is_empty() {
+                    println!("\n{}", "Workflows (legacy):".blue().bold());
+                } else {
+                    println!("\n{}", "Legacy Workflows:".blue().bold());
+                }
+                println!("{}", "=".repeat(50));
+
+                for wf in filtered_old_workflows {
                     println!("{}: {}", "Name".green().bold(), wf.name);
                     println!("{}: {}", "Description".green(), wf.description);
                     println!("{}: {}", "Steps".green(), wf.steps.len());
@@ -170,356 +298,274 @@ fn run() -> Result<()> {
             );
         }
 
-        // New flow subcommand handling
-        Commands::Flow(flow_command) => match flow_command {
-            FlowCommands::Add(add_args) => {
-                let tags = add_args.tags.unwrap_or_else(Vec::new);
+        Commands::AddVar(add_var_args) => {
+            let mut command = storage.get_command(&add_var_args.command_name)?;
 
-                // Read steps from JSON file
-                let steps_json = fs::read_to_string(&add_args.steps_file).map_err(ClixError::Io)?;
-
-                let steps: Vec<WorkflowStep> =
-                    serde_json::from_str(&steps_json).map_err(ClixError::Serialization)?;
-
-                let workflow = Workflow::new(add_args.name, add_args.description, steps, tags);
-
-                storage.add_workflow(workflow)?;
-                println!("{} Workflow added successfully", "Success:".green().bold());
+            if !command.is_workflow() {
+                return Err(ClixError::InvalidCommandFormat(
+                    "Variables can only be added to workflows".to_string(),
+                ));
             }
 
-            FlowCommands::Run(run_args) => {
-                let workflow = storage.get_workflow(&run_args.name)?;
+            let variable = WorkflowVariable::new(
+                add_var_args.name,
+                add_var_args.description,
+                add_var_args.default,
+                add_var_args.required,
+            );
 
-                // Parse variable values if provided
-                let vars = if let Some(var_args) = &run_args.var {
-                    let mut vars_map = HashMap::new();
-                    for var_str in var_args {
-                        if let Some((key, value)) = var_str.split_once('=') {
-                            vars_map.insert(key.to_string(), value.to_string());
-                        } else {
-                            return Err(ClixError::InvalidCommandFormat(format!(
-                                "Invalid variable format: {}, expected key=value",
-                                var_str
-                            )));
-                        }
-                    }
-                    Some(vars_map)
+            command.add_variable(variable);
+            storage.update_command(&command)?;
+
+            println!(
+                "{} Variable added to workflow '{}'",
+                "Success:".green().bold(),
+                add_var_args.command_name
+            );
+        }
+
+        Commands::AddProfile(add_profile_args) => {
+            let mut command = storage.get_command(&add_profile_args.command_name)?;
+
+            if !command.is_workflow() {
+                return Err(ClixError::InvalidCommandFormat(
+                    "Profiles can only be added to workflows".to_string(),
+                ));
+            }
+
+            // Parse variable values
+            let mut vars_map = HashMap::new();
+            for var_str in &add_profile_args.var {
+                if let Some((key, value)) = var_str.split_once('=') {
+                    vars_map.insert(key.to_string(), value.to_string());
                 } else {
-                    None
-                };
+                    return Err(ClixError::InvalidCommandFormat(format!(
+                        "Invalid variable format: {}, expected key=value",
+                        var_str
+                    )));
+                }
+            }
 
-                let results = CommandExecutor::execute_workflow(
-                    &workflow,
-                    run_args.profile.as_deref(),
-                    vars,
-                )?;
+            let profile = WorkflowVariableProfile::new(
+                add_profile_args.name,
+                add_profile_args.description,
+                vars_map,
+            );
 
-                // Print all results
-                println!("\n{}", "Workflow Results:".blue().bold());
-                println!("{}", "=".repeat(50));
+            command.add_profile(profile);
+            storage.update_command(&command)?;
 
-                for (name, result) in results {
-                    println!("{}: {}", "Step".green().bold(), name);
+            println!(
+                "{} Profile added to workflow '{}'",
+                "Success:".green().bold(),
+                add_profile_args.command_name
+            );
+        }
 
-                    match result {
-                        Ok(output) => CommandExecutor::print_command_output(&output),
-                        Err(e) => println!("{} {}", "Error:".red().bold(), e),
-                    }
+        Commands::ListProfiles(list_profiles_args) => {
+            let command = storage.get_command(&list_profiles_args.command_name)?;
 
-                    println!("{}", "-".repeat(50));
+            if !command.is_workflow() {
+                return Err(ClixError::InvalidCommandFormat(
+                    "Profiles can only be listed for workflows".to_string(),
+                ));
+            }
+
+            if command.profiles.is_empty() {
+                println!(
+                    "No profiles defined for workflow '{}'.",
+                    list_profiles_args.command_name
+                );
+                return Ok(());
+            }
+
+            println!("{}", "Workflow Profiles:".blue().bold());
+            println!("{}", "=".repeat(50));
+
+            for (name, profile) in &command.profiles {
+                println!("{}: {}", "Profile".green().bold(), name);
+                println!("{}: {}", "Description".green(), profile.description);
+                println!("{}: {}", "Variables".green(), profile.variables.len());
+
+                for (var_name, var_value) in &profile.variables {
+                    println!("{}: {} = {}", "  Variable".yellow(), var_name, var_value);
                 }
 
-                // Update usage statistics
-                storage.update_workflow_usage(&run_args.name)?;
+                println!("{}", "-".repeat(50));
+            }
+        }
+
+        Commands::AddCondition(args) => {
+            use clix::commands::models::{Condition, ConditionalAction, WorkflowStep};
+
+            let mut command = storage.get_command(&args.command_name)?;
+
+            if !command.is_workflow() {
+                return Err(ClixError::InvalidCommandFormat(
+                    "Conditions can only be added to workflows".to_string(),
+                ));
             }
 
-            FlowCommands::Remove(remove_args) => {
-                storage.remove_workflow(&remove_args.name)?;
-                println!(
-                    "{} Workflow '{}' removed successfully",
-                    "Success:".green().bold(),
-                    remove_args.name
-                );
-            }
+            // Read steps from JSON files
+            let then_steps_json = fs::read_to_string(&args.then_file).map_err(ClixError::Io)?;
+            let then_steps: Vec<WorkflowStep> =
+                serde_json::from_str(&then_steps_json).map_err(ClixError::Serialization)?;
 
-            FlowCommands::AddVar(add_var_args) => {
-                let mut workflow = storage.get_workflow(&add_var_args.workflow_name)?;
+            let else_steps = if let Some(else_file) = &args.else_file {
+                let else_steps_json = fs::read_to_string(else_file).map_err(ClixError::Io)?;
+                let steps: Vec<WorkflowStep> =
+                    serde_json::from_str(&else_steps_json).map_err(ClixError::Serialization)?;
+                Some(steps)
+            } else {
+                None
+            };
 
-                let variable = WorkflowVariable::new(
-                    add_var_args.name,
-                    add_var_args.description,
-                    add_var_args.default,
-                    add_var_args.required,
-                );
-
-                workflow.add_variable(variable);
-                storage.update_workflow(&workflow)?;
-
-                println!(
-                    "{} Variable added to workflow '{}'",
-                    "Success:".green().bold(),
-                    add_var_args.workflow_name
-                );
-            }
-
-            FlowCommands::AddProfile(add_profile_args) => {
-                let mut workflow = storage.get_workflow(&add_profile_args.workflow_name)?;
-
-                // Parse variable values
-                let mut vars_map = HashMap::new();
-                for var_str in &add_profile_args.var {
-                    if let Some((key, value)) = var_str.split_once('=') {
-                        vars_map.insert(key.to_string(), value.to_string());
-                    } else {
+            // Parse action if provided
+            let action = if let Some(action_str) = &args.action {
+                match action_str.as_str() {
+                    "run_then" => Some(ConditionalAction::RunThen),
+                    "run_else" => Some(ConditionalAction::RunElse),
+                    "continue" => Some(ConditionalAction::Continue),
+                    "break" => Some(ConditionalAction::Break),
+                    "return" => {
+                        let return_code = args.return_code.unwrap_or(0);
+                        Some(ConditionalAction::Return(return_code))
+                    }
+                    _ => {
                         return Err(ClixError::InvalidCommandFormat(format!(
-                            "Invalid variable format: {}, expected key=value",
-                            var_str
+                            "Invalid action '{}'. Valid actions: run_then, run_else, continue, break, return",
+                            action_str
                         )));
                     }
                 }
+            } else {
+                None
+            };
 
-                let profile = WorkflowVariableProfile::new(
-                    add_profile_args.name,
-                    add_profile_args.description,
-                    vars_map,
-                );
+            // Create condition
+            let condition = Condition {
+                expression: args.condition.clone(),
+                variable: args.variable.clone(),
+            };
 
-                workflow.add_profile(profile);
-                storage.update_workflow(&workflow)?;
+            // Create conditional step
+            let conditional_step = WorkflowStep::new_conditional(
+                args.name.clone(),
+                args.description.clone(),
+                condition,
+                then_steps,
+                else_steps,
+                action,
+            );
 
-                println!(
-                    "{} Profile added to workflow '{}'",
-                    "Success:".green().bold(),
-                    add_profile_args.workflow_name
-                );
+            // Add the conditional step to the workflow
+            if let Some(ref mut steps) = command.steps {
+                steps.push(conditional_step);
+            }
+            storage.update_command(&command)?;
+
+            println!(
+                "{} Conditional step '{}' added to workflow '{}'",
+                "Success:".green().bold(),
+                args.name,
+                args.command_name
+            );
+        }
+
+        Commands::AddBranch(args) => {
+            use clix::commands::models::{BranchCase, WorkflowStep};
+
+            let mut command = storage.get_command(&args.command_name)?;
+
+            if !command.is_workflow() {
+                return Err(ClixError::InvalidCommandFormat(
+                    "Branches can only be added to workflows".to_string(),
+                ));
             }
 
-            FlowCommands::ListProfiles(list_profiles_args) => {
-                let workflow = storage.get_workflow(&list_profiles_args.workflow_name)?;
+            // Read cases from JSON file
+            let cases_json = fs::read_to_string(&args.cases_file).map_err(ClixError::Io)?;
+            let cases: Vec<BranchCase> =
+                serde_json::from_str(&cases_json).map_err(ClixError::Serialization)?;
 
-                if workflow.profiles.is_empty() {
-                    println!(
-                        "No profiles defined for workflow '{}'.",
-                        list_profiles_args.workflow_name
+            // Read default case if provided
+            let default_case = if let Some(default_file) = &args.default_file {
+                let default_json = fs::read_to_string(default_file).map_err(ClixError::Io)?;
+                let steps: Vec<WorkflowStep> =
+                    serde_json::from_str(&default_json).map_err(ClixError::Serialization)?;
+                Some(steps)
+            } else {
+                None
+            };
+
+            // Create branch step
+            let branch_step = WorkflowStep::new_branch(
+                args.name.clone(),
+                args.description.clone(),
+                args.variable.clone(),
+                cases,
+                default_case,
+            );
+
+            // Add the branch step to the workflow
+            if let Some(ref mut steps) = command.steps {
+                steps.push(branch_step);
+            }
+            storage.update_command(&command)?;
+
+            println!(
+                "{} Branch step '{}' added to workflow '{}'",
+                "Success:".green().bold(),
+                args.name,
+                args.command_name
+            );
+        }
+
+        Commands::ConvertFunction(args) => {
+            use clix::commands::FunctionConverter;
+
+            println!(
+                "{} Converting function '{}' from '{}'...",
+                "Info:".blue().bold(),
+                args.function,
+                args.file
+            );
+
+            let tags = args.tags.unwrap_or_else(Vec::new);
+
+            match FunctionConverter::convert_function(
+                &args.file,
+                &args.function,
+                &args.command_name,
+                &args.description,
+                tags.clone(),
+            ) {
+                Ok(workflow) => {
+                    // Convert the workflow to a unified command
+                    let command = Command::new_workflow(
+                        args.command_name.clone(),
+                        args.description.clone(),
+                        workflow.steps,
+                        tags,
                     );
-                    return Ok(());
+                    storage.add_command(command)?;
+                    println!(
+                        "{} Function '{}' successfully converted to workflow '{}'",
+                        "Success:".green().bold(),
+                        args.function,
+                        args.command_name
+                    );
                 }
-
-                println!("{}", "Workflow Profiles:".blue().bold());
-                println!("{}", "=".repeat(50));
-
-                for (name, profile) in &workflow.profiles {
-                    println!("{}: {}", "Profile".green().bold(), name);
-                    println!("{}: {}", "Description".green(), profile.description);
-                    println!("{}: {}", "Variables".green(), profile.variables.len());
-
-                    for (var_name, var_value) in &profile.variables {
-                        println!("{}: {} = {}", "  Variable".yellow(), var_name, var_value);
-                    }
-
-                    println!("{}", "-".repeat(50));
-                }
-            }
-
-            FlowCommands::List(list_args) => {
-                let workflows = storage.list_workflows()?;
-
-                if workflows.is_empty() {
-                    println!("No workflows stored yet.");
-                    return Ok(());
-                }
-
-                // Filter by tag if provided
-                let filtered_workflows = if let Some(ref tag) = list_args.tag {
-                    workflows
-                        .into_iter()
-                        .filter(|wf| wf.tags.contains(tag))
-                        .collect::<Vec<_>>()
-                } else {
-                    workflows
-                };
-
-                // Print workflows
-                if !filtered_workflows.is_empty() {
-                    println!("\n{}", "Workflows:".blue().bold());
-                    println!("{}", "=".repeat(50));
-
-                    for wf in filtered_workflows {
-                        println!("{}: {}", "Name".green().bold(), wf.name);
-                        println!("{}: {}", "Description".green(), wf.description);
-                        println!("{}: {}", "Steps".green(), wf.steps.len());
-
-                        if !wf.tags.is_empty() {
-                            println!("{}: {}", "Tags".green(), wf.tags.join(", "));
-                        }
-
-                        if let Some(last_used) = wf.last_used {
-                            let now = SystemTime::now()
-                                .duration_since(UNIX_EPOCH)
-                                .unwrap()
-                                .as_secs();
-                            let days_ago = (now - last_used) / (60 * 60 * 24);
-
-                            println!(
-                                "{}: {} ({} days ago)",
-                                "Last used".green(),
-                                wf.use_count,
-                                days_ago
-                            );
-                        }
-
-                        println!("{}", "-".repeat(50));
-                    }
+                Err(e) => {
+                    println!(
+                        "{} Failed to convert function: {}",
+                        "Error:".red().bold(),
+                        e
+                    );
+                    return Err(e);
                 }
             }
-
-            // Handle the new conditional and branch commands
-            FlowCommands::AddCondition(args) => {
-                use clix::commands::models::{Condition, ConditionalAction, WorkflowStep};
-
-                // Read steps from JSON files
-                let then_steps_json = fs::read_to_string(&args.then_file).map_err(ClixError::Io)?;
-                let then_steps: Vec<WorkflowStep> =
-                    serde_json::from_str(&then_steps_json).map_err(ClixError::Serialization)?;
-
-                let else_steps = if let Some(else_file) = &args.else_file {
-                    let else_steps_json = fs::read_to_string(else_file).map_err(ClixError::Io)?;
-                    let steps: Vec<WorkflowStep> =
-                        serde_json::from_str(&else_steps_json).map_err(ClixError::Serialization)?;
-                    Some(steps)
-                } else {
-                    None
-                };
-
-                // Parse action if provided
-                let action = if let Some(action_str) = &args.action {
-                    match action_str.as_str() {
-                        "run_then" => Some(ConditionalAction::RunThen),
-                        "run_else" => Some(ConditionalAction::RunElse),
-                        "continue" => Some(ConditionalAction::Continue),
-                        "break" => Some(ConditionalAction::Break),
-                        "return" => {
-                            let return_code = args.return_code.unwrap_or(0);
-                            Some(ConditionalAction::Return(return_code))
-                        }
-                        _ => {
-                            return Err(ClixError::InvalidCommandFormat(format!(
-                                "Invalid action '{}'. Valid actions: run_then, run_else, continue, break, return",
-                                action_str
-                            )));
-                        }
-                    }
-                } else {
-                    None
-                };
-
-                // Create condition
-                let condition = Condition {
-                    expression: args.condition.clone(),
-                    variable: args.variable.clone(),
-                };
-
-                // Create conditional step
-                let conditional_step = WorkflowStep::new_conditional(
-                    args.name.clone(),
-                    args.description.clone(),
-                    condition,
-                    then_steps,
-                    else_steps,
-                    action,
-                );
-
-                // Get workflow and add the conditional step
-                let mut workflow = storage.get_workflow(&args.workflow_name)?;
-                workflow.steps.push(conditional_step);
-                storage.update_workflow(&workflow)?;
-
-                println!(
-                    "{} Conditional step '{}' added to workflow '{}'",
-                    "Success:".green().bold(),
-                    args.name,
-                    args.workflow_name
-                );
-            }
-            FlowCommands::AddBranch(args) => {
-                use clix::commands::models::{BranchCase, WorkflowStep};
-
-                // Read cases from JSON file
-                let cases_json = fs::read_to_string(&args.cases_file).map_err(ClixError::Io)?;
-                let cases: Vec<BranchCase> =
-                    serde_json::from_str(&cases_json).map_err(ClixError::Serialization)?;
-
-                // Read default case if provided
-                let default_case = if let Some(default_file) = &args.default_file {
-                    let default_json = fs::read_to_string(default_file).map_err(ClixError::Io)?;
-                    let steps: Vec<WorkflowStep> =
-                        serde_json::from_str(&default_json).map_err(ClixError::Serialization)?;
-                    Some(steps)
-                } else {
-                    None
-                };
-
-                // Create branch step
-                let branch_step = WorkflowStep::new_branch(
-                    args.name.clone(),
-                    args.description.clone(),
-                    args.variable.clone(),
-                    cases,
-                    default_case,
-                );
-
-                // Get workflow and add the branch step
-                let mut workflow = storage.get_workflow(&args.workflow_name)?;
-                workflow.steps.push(branch_step);
-                storage.update_workflow(&workflow)?;
-
-                println!(
-                    "{} Branch step '{}' added to workflow '{}'",
-                    "Success:".green().bold(),
-                    args.name,
-                    args.workflow_name
-                );
-            }
-            FlowCommands::ConvertFunction(args) => {
-                use clix::commands::FunctionConverter;
-
-                println!(
-                    "{} Converting function '{}' from '{}'...",
-                    "Info:".blue().bold(),
-                    args.function,
-                    args.file
-                );
-
-                let tags = args.tags.unwrap_or_else(Vec::new);
-
-                match FunctionConverter::convert_function(
-                    &args.file,
-                    &args.function,
-                    &args.workflow_name,
-                    &args.description,
-                    tags.clone(),
-                ) {
-                    Ok(workflow) => {
-                        // Add the workflow to storage
-                        storage.add_workflow(workflow)?;
-                        println!(
-                            "{} Function '{}' successfully converted to workflow '{}'",
-                            "Success:".green().bold(),
-                            args.function,
-                            args.workflow_name
-                        );
-                    }
-                    Err(e) => {
-                        println!(
-                            "{} Failed to convert function: {}",
-                            "Error:".red().bold(),
-                            e
-                        );
-                        return Err(e);
-                    }
-                }
-            }
-        },
+        }
 
         Commands::Export(export_args) => {
             let export_manager = ExportManager::new(storage.get_local_storage().clone());

@@ -6,11 +6,14 @@ use std::time::SystemTime;
 pub struct Command {
     pub name: String,
     pub description: String,
-    pub command: String,
+    pub command: Option<String>,          // None for workflows
+    pub steps: Option<Vec<WorkflowStep>>, // None for simple commands
     pub created_at: u64,
     pub last_used: Option<u64>,
     pub use_count: u32,
     pub tags: Vec<String>,
+    pub variables: Vec<WorkflowVariable>,
+    pub profiles: HashMap<String, WorkflowVariableProfile>,
 }
 
 impl Command {
@@ -23,12 +26,73 @@ impl Command {
         Command {
             name,
             description,
-            command,
+            command: Some(command),
+            steps: None,
             created_at: now,
             last_used: None,
             use_count: 0,
             tags,
+            variables: Vec::new(),
+            profiles: HashMap::new(),
         }
+    }
+
+    pub fn new_workflow(
+        name: String,
+        description: String,
+        steps: Vec<WorkflowStep>,
+        tags: Vec<String>,
+    ) -> Self {
+        let now = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        Command {
+            name,
+            description,
+            command: None,
+            steps: Some(steps),
+            created_at: now,
+            last_used: None,
+            use_count: 0,
+            tags,
+            variables: Vec::new(),
+            profiles: HashMap::new(),
+        }
+    }
+
+    pub fn with_variables(
+        name: String,
+        description: String,
+        steps: Vec<WorkflowStep>,
+        tags: Vec<String>,
+        variables: Vec<WorkflowVariable>,
+    ) -> Self {
+        let mut command = Self::new_workflow(name, description, steps, tags);
+        command.variables = variables;
+        command
+    }
+
+    pub fn is_workflow(&self) -> bool {
+        self.steps.is_some()
+    }
+
+    pub fn add_variable(&mut self, variable: WorkflowVariable) {
+        // Replace if exists, add if not
+        if let Some(idx) = self.variables.iter().position(|v| v.name == variable.name) {
+            self.variables[idx] = variable;
+        } else {
+            self.variables.push(variable);
+        }
+    }
+
+    pub fn add_profile(&mut self, profile: WorkflowVariableProfile) {
+        self.profiles.insert(profile.name.clone(), profile);
+    }
+
+    pub fn get_profile(&self, name: &str) -> Option<&WorkflowVariableProfile> {
+        self.profiles.get(name)
     }
 
     pub fn mark_used(&mut self) {
@@ -374,6 +438,8 @@ impl Workflow {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CommandStore {
     pub commands: HashMap<String, Command>,
+    // Keeping workflows for backward compatibility during migration
+    #[serde(default)]
     pub workflows: HashMap<String, Workflow>,
 }
 

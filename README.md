@@ -31,41 +31,26 @@ cargo install --path .
 
 ## Command Reference
 
-Clix offers a comprehensive set of commands for managing both individual commands and complex workflows. Here's a complete reference of all available commands:
+Clix offers a comprehensive set of commands for managing both individual commands and complex workflows. Commands and workflows are now unified - a command can be a simple single-step operation or a complex multi-step workflow.
 
 ```
 USAGE:
     clix [SUBCOMMAND]
 
 SUBCOMMANDS:
-    add        Add a new command
-    run        Run a stored command
-    list       List all stored commands and workflows
-    remove     Remove a stored command
-    flow       Workflow management commands (see below for subcommands)
-    export     Export commands and workflows to a file
-    import     Import commands and workflows from a file
-    ask        Ask Claude AI for help with creating and running commands
-    settings   Settings management commands (see below for subcommands)
-    git        Git repository management commands (see below for subcommands)
-    help       Print this help message or help for a specific command
-```
-
-Workflow-specific commands:
-
-```
-USAGE:
-    clix flow [SUBCOMMAND]
-
-SUBCOMMANDS:
-    add            Add a new workflow
-    run            Run a stored workflow
-    remove         Remove a stored workflow
-    list           List all stored workflows
-    add-var        Add a variable to a workflow
-    add-profile    Add a profile to a workflow
-    list-profiles  List profiles for a workflow
-    help           Print help for flow or a specific subcommand
+    add           Add a new command or workflow
+    run           Run a stored command or workflow
+    list          List all stored commands and workflows
+    remove        Remove a stored command or workflow
+    add-var       Add a variable to a workflow
+    add-profile   Add a profile to a workflow
+    list-profiles List profiles for a workflow
+    export        Export commands and workflows to a file
+    import        Import commands and workflows from a file
+    ask           Ask Claude AI for help with creating and running commands
+    settings      Settings management commands (see below for subcommands)
+    git           Git repository management commands (see below for subcommands)
+    help          Print this help message or help for a specific command
 ```
 
 Git repository management commands:
@@ -85,29 +70,39 @@ SUBCOMMANDS:
 
 ## Usage
 
-### Adding a command
+### Adding a simple command
 
 ```bash
 clix add my-command --description "Description of the command" --command "echo Hello, World!"
 ```
 
-### Running a command
+### Adding a workflow (multi-step command)
+
+Create a JSON file with workflow steps and add it:
+
+```bash
+clix add my-workflow --description "Description of the workflow" --steps-file workflow.json
+```
+
+### Running a command or workflow
 
 ```bash
 clix run my-command
+# or
+clix run my-workflow
 ```
 
-### Listing commands
+### Listing commands and workflows
 
 ```bash
-# List all commands
+# List all commands and workflows
 clix list
 
 # List commands with a specific tag
 clix list --tag deployment
 ```
 
-### Removing a command
+### Removing a command or workflow
 
 ```bash
 clix remove my-command
@@ -168,7 +163,7 @@ When Claude suggests running a command or creating a new one, you'll be asked fo
 
 ## Working with Workflows
 
-Workflows allow you to define a sequence of steps that are executed in order. Each step can be a regular command or an authentication step that requires user interaction.
+Commands in Clix can be simple single-step operations or complex multi-step workflows. Workflows allow you to define a sequence of steps that are executed in order. Each step can be a regular command or an authentication step that requires user interaction.
 
 ### Creating Workflow Files
 
@@ -230,7 +225,7 @@ Example workflow file (gcloud-workflow.json):
 ]
 ```
 
-### Managing workflows with the `flow` command
+### Managing workflows
 
 #### Adding a workflow
 
@@ -269,33 +264,33 @@ The `step_type` field can be either `Command` or `Auth`:
 Then add the workflow:
 
 ```bash
-clix flow add my-workflow --description "My workflow" --steps-file workflow.json
+clix add my-workflow --description "My workflow" --steps-file workflow.json
 ```
 
 #### Running a workflow
 
 ```bash
 # Run a workflow
-clix flow run my-workflow
+clix run my-workflow
 
 # Run a workflow with specific variable values
-clix flow run my-workflow --var project_name=my-project --var cluster_name=prod-cluster
+clix run my-workflow --var project_name=my-project --var cluster_name=prod-cluster
 
 # Run a workflow using a saved profile
-clix flow run my-workflow --profile prod
+clix run my-workflow --profile prod
 ```
 
 #### Listing workflows
 
 ```bash
-clix flow list
-clix flow list --tag production
+clix list
+clix list --tag production
 ```
 
 #### Removing a workflow
 
 ```bash
-clix flow remove my-workflow
+clix remove my-workflow
 ```
 
 
@@ -334,10 +329,10 @@ You can define variables with descriptions, default values, and requirements to 
 
 ```bash
 # Add a required variable without a default value
-clix flow add-var my-workflow --name cluster_name --description "GKE cluster name" --required
+clix add-var my-workflow --name cluster_name --description "GKE cluster name" --required
 
 # Add an optional variable with a default value
-clix flow add-var my-workflow --name zone --description "GCP zone" --default "us-central1-a" 
+clix add-var my-workflow --name zone --description "GCP zone" --default "us-central1-a" 
 ```
 
 #### Running Workflows with Variables
@@ -346,13 +341,13 @@ There are multiple ways to provide variable values when running a workflow:
 
 ```bash
 # Prompted for variables: You'll be asked for any missing values interactively
-clix flow run my-workflow
+clix run my-workflow
 
 # Command-line variables: Provide values directly in the command
-clix flow run my-workflow --var project_name=my-project --var cluster_name=prod-cluster
+clix run my-workflow --var project_name=my-project --var cluster_name=prod-cluster
 
 # Mixed approach: Provide some values via command line, be prompted for others
-clix flow run my-workflow --var project_name=my-project
+clix run my-workflow --var project_name=my-project
 ```
 
 ### Variable Profiles
@@ -361,27 +356,27 @@ Profiles allow you to save sets of variable values for different environments (l
 
 ```bash
 # Create a production profile
-clix flow add-profile my-workflow --name prod --description "Production environment" \
+clix add-profile my-workflow --name prod --description "Production environment" \
   --var project_name=prod-project \
   --var cluster_name=prod-cluster \
   --var zone=us-central1-a \
   --var namespace=production
 
 # Create a development profile
-clix flow add-profile my-workflow --name dev --description "Development environment" \
+clix add-profile my-workflow --name dev --description "Development environment" \
   --var project_name=dev-project \
   --var cluster_name=dev-cluster \
   --var zone=us-central1-a \
   --var namespace=development
 
 # List all profiles for a workflow
-clix flow list-profiles my-workflow
+clix list-profiles my-workflow
 
 # Run a workflow with a specific profile
-clix flow run my-workflow --profile prod
+clix run my-workflow --profile prod
 
 # Override specific profile values
-clix flow run my-workflow --profile prod --var cluster_name=prod-cluster-2
+clix run my-workflow --profile prod --var cluster_name=prod-cluster-2
 ```
 
 Profiles make it easy to switch between environments without having to remember and type all the variable values each time.

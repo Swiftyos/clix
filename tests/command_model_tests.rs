@@ -17,10 +17,14 @@ fn test_command_creation() {
 
     assert_eq!(command.name, name);
     assert_eq!(command.description, description);
-    assert_eq!(command.command, command_str);
+    assert_eq!(command.command, Some(command_str));
     assert_eq!(command.tags, tags);
     assert_eq!(command.use_count, 0);
     assert!(command.last_used.is_none());
+    assert_eq!(command.steps, None);
+    assert!(command.variables.is_empty());
+    assert!(command.profiles.is_empty());
+    assert!(!command.is_workflow());
 
     // Ensure created_at is reasonably close to now
     let now = SystemTime::now()
