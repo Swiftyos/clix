@@ -1,0 +1,23 @@
+A command-line tool for storing and executing developer workflows
+
+Usage: clix <COMMAND>
+
+Commands:
+  add               Add a new command
+  run               Run a stored command
+  list              List all stored commands and workflows
+  remove            Remove a stored command
+  add-var           Add a variable to a workflow
+  add-profile       Add a profile to a workflow
+  list-profiles     List profiles for a workflow
+  add-condition     Add a conditional step to a workflow
+  add-branch        Add a branch step to a workflow
+  convert-function  Convert a shell function to a workflow
+  export            Export commands and workflows to a file
+  import            Import commands and workflows from a file
+  ask               Ask Claude AI for help with creating and running commands
+  settings          Settings management commands
+  completions       Generate shell completions
+  git               Git repository management commands
+  help              Print this message or the help of the given subcommand(s)
+

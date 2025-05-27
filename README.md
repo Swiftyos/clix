@@ -568,6 +568,14 @@ Before submitting a pull request, please ensure:
 
 4. **Documentation is updated** if needed
 
+## Snapshot Testing and Benchmarking
+
+Snapshot tests verify CLI output using stored files. Benchmark tests check basic storage performance. Run them with the standard test command:
+```bash
+cargo nextest run
+```
+
+
 ## License
 
 MIT
