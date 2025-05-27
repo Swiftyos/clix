@@ -568,9 +568,19 @@ Before submitting a pull request, please ensure:
 
 4. **Documentation is updated** if needed
 
-## Snapshot Testing and Benchmarking
+## Testing
 
-Snapshot tests verify CLI output using stored files. Benchmark tests check basic storage performance. Run them with the standard test command:
+### Snapshot Testing
+
+Snapshot tests ensure critical data formats remain stable. The project includes:
+
+- **Data Structure Snapshots**: Verify JSON export formats for commands and complex workflows remain consistent
+- **Export Serialization Tests**: Catch regressions in import/export functionality that teams rely on for sharing commands
+
+### Performance Testing
+
+Benchmark tests verify basic storage operations remain fast. Run all tests with:
+
 ```bash
 cargo nextest run
 ```
