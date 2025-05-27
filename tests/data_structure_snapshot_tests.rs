@@ -1,8 +1,5 @@
-use clix::commands::models::{
-    Command, WorkflowStep, WorkflowVariable, Condition, BranchCase
-};
+use clix::commands::models::{BranchCase, Command, Condition, WorkflowStep, WorkflowVariable};
 use clix::share::export::{ExportData, ExportMetadata};
-use serde_json;
 use std::collections::HashMap;
 use std::fs;
 
@@ -133,7 +130,8 @@ fn workflow_export_serialization_snapshot() {
     };
 
     // Serialize to JSON
-    let json_output = serde_json::to_string_pretty(&export_data).expect("Failed to serialize export data");
+    let json_output =
+        serde_json::to_string_pretty(&export_data).expect("Failed to serialize export data");
     let normalized_output = normalize_json(&json_output);
 
     // Read expected snapshot - if it doesn't exist, write the output for manual inspection
@@ -143,8 +141,8 @@ fn workflow_export_serialization_snapshot() {
         panic!("Created new snapshot file: {}", snapshot_path);
     }
 
-    let expected = fs::read_to_string(snapshot_path)
-        .expect("Missing workflow export snapshot file");
+    let expected =
+        fs::read_to_string(snapshot_path).expect("Missing workflow export snapshot file");
     let normalized_expected = normalize_json(&expected);
 
     pretty_assertions::assert_eq!(normalized_expected, normalized_output);
@@ -176,7 +174,8 @@ fn simple_command_export_snapshot() {
         workflows: None,
     };
 
-    let json_output = serde_json::to_string_pretty(&export_data).expect("Failed to serialize export data");
+    let json_output =
+        serde_json::to_string_pretty(&export_data).expect("Failed to serialize export data");
     let normalized_output = normalize_json(&json_output);
 
     // Read expected snapshot - if it doesn't exist, write the output for manual inspection
@@ -186,8 +185,8 @@ fn simple_command_export_snapshot() {
         panic!("Created new snapshot file: {}", snapshot_path);
     }
 
-    let expected = fs::read_to_string(snapshot_path)
-        .expect("Missing simple command export snapshot file");
+    let expected =
+        fs::read_to_string(snapshot_path).expect("Missing simple command export snapshot file");
     let normalized_expected = normalize_json(&expected);
 
     pretty_assertions::assert_eq!(normalized_expected, normalized_output);
