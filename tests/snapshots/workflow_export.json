@@ -1,0 +1,158 @@
+{
+  "commands": {
+    "complex-deploy": {
+      "command": null,
+      "created_at": 1684756234,
+      "description": "Complex deployment workflow with conditionals and branches",
+      "last_used": null,
+      "name": "complex-deploy",
+      "profiles": {},
+      "steps": [
+        {
+          "command": "",
+          "conditional": {
+            "action": null,
+            "condition": {
+              "expression": "[ \"$ENV\" = \"dev\" -o \"$ENV\" = \"staging\" ]",
+              "variable": null
+            },
+            "else_block": {
+              "steps": [
+                {
+                  "command": "echo \"Invalid environment: $ENV\" && exit 1",
+                  "continue_on_error": false,
+                  "description": "Print error and exit",
+                  "name": "Invalid Environment",
+                  "require_approval": false,
+                  "step_type": "Command"
+                }
+              ]
+            },
+            "then_block": {
+              "steps": [
+                {
+                  "command": "echo \"Valid environment: $ENV\"",
+                  "continue_on_error": false,
+                  "description": "Print valid environment",
+                  "name": "Valid Environment",
+                  "require_approval": false,
+                  "step_type": "Command"
+                }
+              ]
+            }
+          },
+          "continue_on_error": false,
+          "description": "Check if environment is valid",
+          "name": "Environment Check",
+          "require_approval": false,
+          "step_type": "Conditional"
+        },
+        {
+          "command": "echo \"Preparing deployment\"",
+          "continue_on_error": false,
+          "description": "Prepare for deployment",
+          "name": "Pre-deploy",
+          "require_approval": false,
+          "step_type": "Command"
+        },
+        {
+          "branch": {
+            "cases": [
+              {
+                "steps": [
+                  {
+                    "command": "echo \"Deploying to dev\"",
+                    "continue_on_error": false,
+                    "description": "Deploy to development",
+                    "name": "Dev Deploy",
+                    "require_approval": false,
+                    "step_type": "Command"
+                  }
+                ],
+                "value": "dev"
+              },
+              {
+                "steps": [
+                  {
+                    "command": "echo \"Deploying to staging\"",
+                    "continue_on_error": false,
+                    "description": "Deploy to staging with approval",
+                    "name": "Staging Deploy",
+                    "require_approval": true,
+                    "step_type": "Command"
+                  }
+                ],
+                "value": "staging"
+              }
+            ],
+            "default_case": [
+              {
+                "command": "echo \"Unknown environment, using defaults\"",
+                "continue_on_error": true,
+                "description": "Default deployment",
+                "name": "Default Deploy",
+                "require_approval": false,
+                "step_type": "Command"
+              }
+            ],
+            "variable": "ENV"
+          },
+          "command": "",
+          "continue_on_error": false,
+          "description": "Deploy based on environment type",
+          "name": "Deploy by Environment",
+          "require_approval": false,
+          "step_type": "Branch"
+        },
+        {
+          "command": "echo \"Deployment complete\"",
+          "continue_on_error": false,
+          "description": "Finalize deployment",
+          "name": "Post-deploy",
+          "require_approval": false,
+          "step_type": "Command"
+        }
+      ],
+      "tags": [
+        "deployment",
+        "complex"
+      ],
+      "use_count": 0,
+      "variables": [
+        {
+          "default_value": "dev",
+          "description": "Deployment environment (dev, staging, prod)",
+          "name": "ENV",
+          "required": true
+        },
+        {
+          "default_value": null,
+          "description": "Version to deploy",
+          "name": "VERSION",
+          "required": false
+        }
+      ]
+    },
+    "hello": {
+      "command": "echo \"Hello, World!\"",
+      "created_at": 1684756234,
+      "description": "Simple hello world command",
+      "last_used": null,
+      "name": "hello",
+      "profiles": {},
+      "steps": null,
+      "tags": [
+        "example"
+      ],
+      "use_count": 0,
+      "variables": []
+    }
+  },
+  "metadata": {
+    "description": "Test export with complex workflow structures",
+    "exported_at": 1684756234,
+    "exported_by": "test-user"
+  },
+  "version": "0.1.0",
+  "workflows": null
+}
