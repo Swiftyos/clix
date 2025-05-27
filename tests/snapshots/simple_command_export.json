@@ -1,0 +1,26 @@
+{
+  "commands": {
+    "git-status": {
+      "command": "git status --porcelain",
+      "created_at": 1684756234,
+      "description": "Show git repository status",
+      "last_used": null,
+      "name": "git-status",
+      "profiles": {},
+      "steps": null,
+      "tags": [
+        "git",
+        "status"
+      ],
+      "use_count": 0,
+      "variables": []
+    }
+  },
+  "metadata": {
+    "description": "Test export with simple command",
+    "exported_at": 1684756234,
+    "exported_by": "test-user"
+  },
+  "version": "0.1.0",
+  "workflows": null
+}
